@@ -138,6 +138,21 @@ Finally, when merging another set $S'$ into the current set $S$, if an element $
 \caption{\label{alg:inf-p-set} $\infty$P-Set CRDT (State-based)}
 \end{algorithm}
 
+\subsection{Causal and Concurrent Behaviour}
+
+The full behaviour of an $\infty$P-Set implies the followings, starting from an initial state $S$ and two operations $\textit{add}_r(e)$ and $\textit{remove}_{r'}(e)$ respectively happening on replicas $r$ and $r'$ and a final state $S'$ after both replicas $r$ and $r'$ have merged:
+\begin{enumerate}
+	\item If $\textit{add}_r(e)$ happens before $\textit{remove}_{r'}(e)$ ($\textit{add}_r(e)\rightarrow \textit{remove}_{r'}(e)$) then eventually $e \notin S'$ on $r$ and $r'$ regardless of the state of $e$ in $S$;
+	\item else if $\textit{remove}_r'(e)$ happens before $\textit{add}_{r}(e)$ ($\textit{remove}_{r'}(e) \rightarrow  \textit{add}_r(e)$) then eventually $e \in S$ on $r$ and $r'$ regardless of the state of $e$ in $S$;
+	\item else $add_r(e) ~||~ remove_{r'}(e)$ and the result depends on $S$:
+	    \begin{enumerate}
+		\item	 If $e \in S$ ($D[e]$ is odd) then $add_r(e)$ has no effect, $remove_{r'}(e)$ wins and eventually $e \notin S'$ on $r$ and $r'$
+		\item Else $e \notin S$ (either $e \notin \textit{keys}(D)$ or $D[e]$ is even), $remove_{r'}(e)$  has no effect, $add_r(e)$ wins and eventually $e \in S'$ on $r$ and $r'$
+	    \end{enumerate}
+\end{enumerate}
+
+If replicas $r$ and $r'$ are in different states, there still exists a common state $S$ they both were in in the past (the initial state if nothing else), and from that point, the longest alternating sequence of \textit{add(e)} and \textit{remove(e)} following the causal history across replicas determines the final state.
+
 \subsection{System Model}
 
 As customary for state-based CRDTs~\cite{shapiro:inria-00555588}, Algorithm~\ref{alg:inf-p-set} only assumes an underlying unreliable communication channel that eventually delivers  a message (possibly mutiple times) if the message is sent infinitely often. Moreover,  it assumes that transitive connectivity between replicas exists. Replicas may become unresponsive for arbitrarily long and infinitely often as long as they do eventually recover after each failure.
@@ -217,35 +232,39 @@ It follows that $S \leq S''$ and $S' \leq S''$ in $L$. All operations are theref
 By definition, because all the three previous lemmas are true, which correspond to the conditions stated initially, $\infty$P-Set is a state-based CRDT.
 \end{proof} 
 
-\subsubsection{Correspondance to Sequential Behavior of the Longest Chain}
+\subsubsection{Known Anomalies Are Avoided}
 
-A proof of convergence does not guarantee that the behaviour of a CRDT corresponds to the usual expectations of a programmer, compared to a non-replicated equivalent object. We therefore also prove that the longest chain behaves the same as if it had been applied on a sequential non-replicated set:
+We show here that anomalies previously identified~\cite{bieniusa:hal-00769554} are correctly handled by $\infty$P-Set. 
+
+First, the specific execution in which the effect of a \textit{remove} is ignored even if it happened after an \textit{add} from a different replica (Fig. 1(a) in~\cite{bieniusa:hal-00769554}) does not happen with $\infty$P-Set because as mentioned previously, in the presence of a causal relationship the remove will apply.
+
+Second,  the $\infty$P-Set does not exhibit the counter-intuitive merging behaviour of C-Sets in which two replicas may both issue a sequence of \textit{add(e)} and \textit{remove(e)} that ends in an \textit{add(e)} while $e$ is not in the set after synchronization~\cite{bieniusa:hal-00769554}:
 
 \begin{theorem}
-The state of an $\infty$P-Set $S$, after each update forming the latest known longest sequence, is equivalent to applying the same sequence of updates on a sequential non-replicated set.
-\end{theorem}
-
-\subsubsection{Principle of State Equivalence}
-
-Moreover, the $\infty$P-Set does not exhibit the counter-intuitive merging behaviour of C-Sets~\cite{bieniusa:hal-00769554}. Formally: 
-\begin{theorem}
-Merging any two $\infty$P-Sets whose last operation was an \textit{add(e)} (or \textit{remove(e)}) into a set $S'$ will always result in $e \in S'$ (respectively $e \notin S'$).
+Merging any two $\infty$P-Sets $S$ and $S'$, whose last operation was an \textit{add(e)} (or \textit{remove(e)}), always results in a set $S''$ such that $e \in S''$ (respectively $e \notin S''$).
 \end{theorem}
 
 \begin{proof}
-There are two cases: 1) both $S$ and $S'$ are odd and of identical length and the state of both replicas will be unchanged after a merge, with $e$ in the set; 2) otherwise, the longest sequence wins and  $e$ is in the set because the longest sequence ends with an $add(e)$ (by definition). The proof for \textit{remove(e)} being the last operation of both sequences is the same.
+When observing the corresponding dictionaries $D$, $D'$, and $D''$, with both $D[e]$ and $D'[e]$ are odd because their last operation was an \textit{add(e)}:
+\begin{enumerate}
+    \item $D[e]=D'[e]$ and after a merge $D''[e]=D[e]=D'[e]$;
+    \item $D[e]>D'[e]$ or $D[e]<D[e']$: after a merge $D''[e]=max(D[e], D''[e])$
+\end{enumerate}   
+
+In both cases $D''[e]$ is also odd and $e \in S''$.  The proof for \textit{remove(e)} being the last operation of both sequences is similar, except that $D$ and $D'$ are even.
 \end{proof}
 
-
-
+Third, whenever two replicas $r$ and $r'$ issue the same sequence of \textit{add(e)} and \textit{remove(e)} starting from the same state $S$ (Fig. 1 b and c in~\cite{bieniusa:hal-00769554}), $r$ and $r'$ will both end in the same state $S'$ after synchronization, regardless at which point the synchronization happens and even if no synchronization happens, because the same sequence will result in the same counter for $e$ on all replicas.
 
 \subsection{Resource Consumption}
 \label{sec:resource-consumption}
 
-The overhead of the $\infty$P-Set is a single integer per element and associated containers. It can be implemented as a set of tuples $(e,c)$ where $e$ is the element and $c$ the associated counter. It can also be implemented as a hash-map: current language implementation usually represent integer literals as tagged pointers allowing counts to reach counts up to 
+The overhead of the $\infty$P-Set is a single integer per element and associated containers. It can be implemented as a set of tuples $(e,c)$ where $e$ is the element and $c$ the associated counter. It can also be implemented as a hash-map: current language implementations usually represent integer literals as tagged pointers allowing counts to reach counts up to 
 $\frac{\textit{register size}}{2^\textit{tag bit-length}}$. In practice this reaches over billions on today's architectures which should cover most practical sequences of additions and removals. Up to the limit of literal integer representations, the memory consumption is constant.
 
 In contrast to Observe-Remove Sets (OR-Sets)~\cite{shapiro:inria-00555588}, each add operation does not need to be tracked with a separate unique identifier and stored in a set. The OR-set uses memory proportional to the number of additions that have happened since the last removal, with one unique identifier for each, in addition to the size of the set container for each element that has ever been added in the set $S$.
+
+In contrast to Last-Writer-Wins Sets (LWW-Sets)~\cite{shapiro:inria-00555588}, no timestamps are required and only a single set (or dictionary) is needed, and garbage collection of stale tuples is unnecessary.
 
 %\section{Related Work}
 %\label{sec:related-work}
@@ -261,6 +280,10 @@ In contrast to Observe-Remove Sets (OR-Sets)~\cite{shapiro:inria-00555588}, each
 
 \section{Conclusion and Future Work}
 \label{sec:conclusion}
+
+We have presented the state-based $\infty$P-Set CRDT. To the best of our knowledge, this is the first design for a set CRDT that leverages the \textit{longest alternating sequence of adds and removes} property to resolve concurrent modifications. This approach requires only a single extra integer per element to track whether the element was last added or removed, which is less than previously known set designs. We have shown that it converges and that it avoids anomalies that affected some other designs, such as the C-Set.
+
+We plan to extend the design to arbitrary (Byzantine) failures in the future and apply the design in application to validate whether the currency semantics can suit both programmers and end users.
 
 \section{Acknowledgements}
 \label{sec:acknowledgements}
