@@ -191,7 +191,7 @@ We prove the following three lemmas, \textit{ordering}, \textit{least upper boun
 Ordering: All possible states of an $\infty$P-Set are organized in a semi-lattice $L$ ordered by \texttt{compare} ($\leq$).
 \end{lemma}
 \begin{proof}
- \texttt{Compare} establishes a partial order that is the conjunction of the properties of partial ordering of Grow-Only Set and the total ordering of Max-Counters: given two $\infty$P-Set with corresponding internal states represented respectively as the dictionaries $D$ and $D'$, $D$ is smaller or equal than $D'$ ($D \leq D'$) if and only if: 
+ \texttt{Compare} establishes a partial order that is the conjunction of the properties of partial ordering of Grow-Only Sets and the total ordering of Max-Counters: given two $\infty$P-Set with corresponding internal states represented respectively as the dictionaries $D$ and $D'$, $D$ is smaller or equal than $D'$ ($D \leq D'$) if and only if: 
  \begin{enumerate}
      \item the keys of $D$ are a subset of those of $D'$ ($\textit{keys}(D) \subseteq \textit{keys}(D')$) which corresponds to the partial ordering of a Grow-Only Set; 
      \item for each key $e$ present both in $D$ and $D'$, the counter for $e$ in $D$, ($D[e]$) is smaller or equal than the counter for $e$ in $D'$ ($D[e] \leq D'[e]$) which corresponds to the total ordering of Max-Counters. 
