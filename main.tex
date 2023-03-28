@@ -10,6 +10,7 @@
 \usepackage[noend]{algpseudocode}
 \usepackage{amsthm}
 \usepackage{hyperref}
+\usepackage{todonotes}
 
 \newtheorem{theorem}{Theorem}
 \newtheorem{lemma}{Lemma}
@@ -27,7 +28,7 @@
 \begin{abstract}
 The 2P-Set Conflict-Free Replicated Data Type (CRDT) supports two phases for each possible element: in the first phase an element can be added to the set and the subsequent additions are ignored; in the second phase an element can be removed after which it will stay removed forever regardless of subsequent additions and removals. We generalize the 2P-Set to support an infinite sequence of alternating additions and removals of the same element. In the presence of concurrent additions and removals on different replicas, all replicas will eventually converge to the longest sequence of alternating additions and removals that follows causal history across replicas. 
 
-Compared to existing set CRDTs that also support arbitrary long sequences of additions and removals, the implementation is more efficient, by requiring only a single extra integer per element. In contrast to an Observe-Remove Set (OR-Set), an $\infty$P-Set does not need to  independently track each addition operation with unique identifiers. In contrast to a Last-Writer-Wins Set (LWW-Set), the state of an $\infty$P-Set requires only one set instead of two, does not require timestamps, and does not require garbage collecting stale state tuples.
+The idea of converging on the longest-causal sequence of opposite operations had already been suggested in the context of an undo-redo framework but the design was neither given a name nor fully developed. In this paper, we present the full design directly, using nothing more than the basic formulation of state-based CRDTs. We also show the connection between the set-based definition of 2P-Set and the counter-based definition of the $\infty$P-Set with simple reasoning. This paper should be useful as a pedagogical example for designing state-based CRDT, and hopefully raise the profile of CRDTs based on \textit{longest sequence wins}.
 \end{abstract}
 
 \section{Introduction}
@@ -42,39 +43,32 @@ The Observe-Remove-Set (OR-Set)~\cite{shapiro:inria-00555588} also enables addit
 
 The Last-Writer-Wins-Set (LWW-Set)~\cite{shapiro:inria-00555588} also enables addition of an element after removal but requires two sets, ordering of concurrent operations according to a timestamp, and garbage collection of stale state tuples.
 
-We propose a new set definition that is based on the following two observations. First, given operations \textit{add(e)} and \textit{remove(e)} on a set $S$ implemented as a CRDT, the implementation of $S$ has only two possible states: one in which an element $e$ is in the set $S$ ($e \in S$) and one in which an element $e$ is not in the set $S$ ($e \notin S$). When $e \in S$, only a \textit{remove(e)} modifies the state, and when $e \notin S$, only an \textit{add(e)} modifies the state. When only observing state changes, any arbitrary sequence of \textit{add(e)} and \textit{remove(e)} is actually equivalent to a strict alternating sequence of \textit{add(e)} and \textit{remove(e)}. Second, two replicas performing the same sequence of \textit{add(e)} and \textit{remove(e)} will reach the same state, even without communication. When two replicas have sequences of different lengths, we can see the smaller as a prefix of the longer and ignore the smaller, therefore \textit{the longest sequence eventually wins} and all replicas converge to the final state of the longest sequence. Note that the longest sequence need not happen on a single replica, it may actually have been generated through a sequence of replicas according to the causal history. Note also that the longest sequence will be given priority even if a concurrent but more recent shorter sequence exists, \textit{e.g.}, according to a global timestamp.
+The T-Set~\cite{Dolan2020undoable} also enables addition of an element after removal and represents whether an element is in a set or not by associating it with 0 or 1 with modifications performed as modulo 2 operations. However, its operation-based formulation relies on causal delivery to determine which operation happened last. A similar state-based design, based on the mapping of the state of elements in the set to integers, had previously been  suggested in the context of a framework for undo-redo operations on state-based CRDTs~\cite{Yu2019undo}. However, the complete design had not been presented and no name had been given to it.
 
-Our set definition only requires a single integer to track the state of an element. It is therefore more memory efficient than the OR-Set or the LWW-Set, both requiring an additional set and potentially many tuples to independently track the origin of operations.
+In this paper, we present the complete design of a state-based set design that supports an infinite sequence of additions and removals, which we call the $\infty$P-Set due to its straight-forward extension of the 2P-Set semantics. An $\infty$P-Set represents whether an element is in a set as positive integers. During concurrent modifications, the \textit{longest sequence wins}. Similar to the T-Set~\cite{Dolan2020undoable} and unnamed predecessor~(\cite{Yu2019undo}, Section 5.1), our design derives from the following two straight-forward observations. First, given operations \textit{add(e)} and \textit{remove(e)} on a set $S$ implemented as a CRDT, the implementation of $S$ has only two possible states: one in which an element $e$ is in the set $S$ ($e \in S$) and one in which an element $e$ is not in the set $S$ ($e \notin S$). When $e \in S$, only a \textit{remove(e)} modifies the state, and when $e \notin S$, only an \textit{add(e)} modifies the state. When only observing state changes, any arbitrary sequence of \textit{add(e)} and \textit{remove(e)} is actually equivalent to a strict alternating sequence of \textit{add(e)} and \textit{remove(e)}. Second, two replicas performing the same sequence of \textit{add(e)} and \textit{remove(e)} will reach the same state, even without communication. When two replicas have sequences of different lengths, we can see the smaller as a prefix of the longer and ignore the smaller, therefore \textit{the longest sequence eventually wins} and all replicas converge to the final state of the longest sequence. Note that the longest sequence need not happen on a single replica, it may actually have been generated through a sequence of replicas according to the causal history. Note also that the longest sequence will be given priority even if a concurrent but more recent shorter sequence exists, \textit{e.g.}, according to a global timestamp.  
 
-In this paper\footnote{Sources for this paper are also available here: \url{https://github.com/cn-uofbasel/infinite-P-Set}. Pull-requests to suggest corrections are welcome.}, we therefore make the following contributions:
-\begin{itemize}
-	\item We specify the $\infty$P-Set, a generalization of the 2P-Set that supports an infinite sequence of \textit{addition} and \textit{removal} operations (Section~\ref{sec:specification});
-	\item We prove that the $\infty$P-Set is a state-based CRDT (Section~\ref{sec:proofs});
-	\item We show that it uses less memory than an OR-Set or LWW-Set (Section~\ref{sec:resource-consumption}).
-\end{itemize}
-
-We then conclude with a summary and some directions for future work.
+In the rest of this paper\footnote{Sources for this paper are also available here: \url{https://github.com/cn-uofbasel/infinite-P-Set}. Pull-requests to suggest corrections are welcome.}, we present the complete design of an $\infty$P-Set, including how the design follows from a straight-forward extension of a 2P-Set (Section~\ref{sec:specification}). We prove that the $\infty$P-Set is a state-based CRDT and therefore converges and also avoids issues that plagued some previous designs (Section~\ref{sec:proofs}). The proofs are straight-forward but explicit, which should make them good pedagogical examples for practitioners. We also discuss its lower memory consumption compared to an OR-Set or LWW-Set (Section~\ref{sec:resource-consumption}). We then conclude with a summary and some directions for future work (Section~\ref{sec:conclusion}).
 
 \section{$\infty$P-Set}
 \label{sec:specification}
 
 The $\infty$P-Set enables each possible element to be either in or out of the set, following a possibly infinite sequence of addition and removal operations. Concurrent additions and removals are resolved by having the longest sequence of alternating additions and removals win. 
 
-In this section, we first present the intuition that guided our design (Section~\ref{sec:intuition}), the state and operations specifying its behaviour (Section~\ref{sec:data-type}), its causal and concurrent behaviour (Section~\ref{sec:causal-concurrent-behaviour}), and the system model under which it is valid (Section~\ref{sec:system-model}).
+In this section, we first present how the design is an extension of a 2P-Set (Section~\ref{sec:intuition}), the state and operations specifying its behaviour (Section~\ref{sec:data-type}), its causal and concurrent behaviour (Section~\ref{sec:causal-concurrent-behaviour}), and the system model under which it is valid (Section~\ref{sec:system-model}).
 
 \subsection{From 2P-Set to $\infty$P-Set}
 \label{sec:intuition}
 
-Our design is a generalization of the behaviour of the 2P-Set. We present the inductive connection between the two in progressive steps. 
+Our design is a generalization of the behaviour of the 2P-Set, which we show in progressive steps. 
 
 In a 2P-Set, an element $e$ can either be \textit{in} a set $S$ ($e \in S$) or \textit{out} of the same set ($e \notin S$). An element is initially out of the set. After an addition (\textit{add(e)}), the element is in the set, which corresponds to the first phase. Any subsequent addition of $e$ does not change the state of $S$. After a removal (\textit{remove(e)}), $e$ is then considered out of the set forever, which corresponds to the second phase.
 
 A 2P-Set is implemented by combining 2 \textit{grow-only sets} $A$ and $R$. $A$ tracks additions, and is accordingly called the \textit{add-set}; $R$ tracks removals, and is accordingly called the \textit{remove-set} (or \textit{tombstones} set). The \textit{add(e)} operation adds $e$ to the add-set $A$. The \textit{remove(e)} operation adds $e$ to the remove-set $R$, only if $e$ is already in the add-set $A$. The element $e$ is considered in $S$ if and only if $e$ is in the difference of $A$ and $R$, \textit{i.e.} $e \in S \Leftrightarrow e \in (A\backslash R)$. Merging two states $S_1 = (A_1, R_1)$ and $S_2 = (A_2, R_2)$ is simply the union of their components, \textit{i.e.} $(A_1 \cup A_2, R_1 \cup R_2)$.
 
-The 2P-Set can be extended to a 4P-Set by adding another pair of \textit{grow-only sets}, so that the state of $S$ can be described by two pairs of add-remove-sets $(A_1,R_1,A_2,R_2)$.  This enables $e$ to be added, then removed, then added again, then removed one last time before staying removed forever. During an \textit{add(e)} operation, if $e$ is not in any of the components of a set $S$, it is added to $A_1$; if it is in both in $A_1$ and $R_1$, it is added to $A_2$; otherwise, the \textit{add(e)} is ignored. Similarly, during a \textit{remove(e)} operation, if $e$ is only in $A_1$, $e$ is added to $R_1$; if $e$ is in $A_1$, $R_1$, and $A_2$, $e$ is added to $R_2$; otherwise the \textit{remove(e)} is ignored. The element $e$ is considered in the set $S$ if and only if the set difference of either pair includes $e$, \textit{i.e.} $e \in S \Leftrightarrow e \in  ((A_1 \backslash R_1) \cup (A_2 \backslash R_2))$. Merging follows accordingly.
+The 2P-Set can be extended to a 4P-Set by adding another pair of \textit{grow-only sets}, so that the state of $S$ can be described by two pairs of add-remove-sets $(A_1,R_1,A_2,R_2)$.  This enables $e$ to be added, then removed, then added again, then removed one last time before staying removed forever. During an \textit{add(e)} operation, if $e$ is not in any of the components of a set $S$, it is added to $A_1$; if it is in both in $A_1$ and $R_1$, it is added to $A_2$; otherwise, the \textit{add(e)} is ignored. Similarly, during a \textit{remove(e)} operation, if $e$ is only in $A_1$, $e$ is added to $R_1$; if $e$ is in $A_1$, $R_1$, and $A_2$, $e$ is added to $R_2$; otherwise the \textit{remove(e)} is ignored. The element $e$ is considered in the set $S$ if and only if the set difference of either pair includes $e$, \textit{i.e.} $e \in S \Leftrightarrow e \in  ((A_1 \backslash R_1) \cup (A_2 \backslash R_2))$. Merging is simply the element-wise union of components.
 
 The 2P-Set can be extended to an $\infty$P-Set by adding an infinite number of add-remove-set pairs $(A_1, R_1, A_2, R_2, \dots)$. Manipulating an infinite number of sets is unwieldy, so instead we can track the number of add-sets and remove-sets 
-$e$ is included in: if $e$ is in all add-sets up to $A_i$ and all remove-sets up to $R_{j}$, we simply store the state of $e$ as $(i, j)$. Furthermore, because the state of $e$ is strictly alternating between being in and out of $S$, and $i$ and $j$ monotonically grow as $e$ is further added and removed, we can simply map the state of $e$ to a single positive integer $k=i+j$\footnote{This last step was observed simultaneously by Christian F. Tschudin and Ramon Locher in a CRDT seminar we taught.}. The element $e$ is in $S$ if and only if $k$ is odd otherwise it is out of $S$, \textit{i.e.} $e \in S \Leftrightarrow odd(k)$. Merging the state of $e$ in $S_1$ and $e$ in $S_2$ corresponds to taking the maximum value of the corresponding counters, \textit{i.e.} $\textit{max}(k_1, k_2)$, which accordingly is determined by the longest sequence of \textit{add(e)} and \textit{remove(e)} that happened across replicas. 
+$e$ is included in: if $e$ is in all add-sets up to $A_i$ and all remove-sets up to $R_{j}$, we simply store the state of $e$ as $(i, j)$. Furthermore, because the state of $e$ is strictly alternating between being in and out of $S$, and $i$ and $j$ monotonically grow as $e$ is further added and removed, we can simply map the state of $e$ to a single positive integer $k=i+j$. The element $e$ is in $S$ if and only if $k$ is odd otherwise it is out of $S$, \textit{i.e.} $e \in S \Leftrightarrow odd(k)$. Merging the state of $e$ in $S_1$ and $e$ in $S_2$ corresponds to taking the maximum value of the corresponding counters, \textit{i.e.} $\textit{max}(k_1, k_2)$, which accordingly is determined by the longest sequence of \textit{add(e)} and \textit{remove(e)} that happened across replicas. 
 
 \subsection{State and Operations}
 \label{sec:data-type}
@@ -128,7 +122,7 @@ Operations are the followings:
 	\State \Return $D'$
     \EndFunction
     \State
-    \Function{compare}{$D$, $D'$} \Comment{$D \leq D'$}
+    \Function{compare}{$D$, $D'$} \Comment{true iff $D \leq D'$}
     	\State \Return $\textit{keys}(D) \subseteq \textit{keys}(D')$ ~\textbf{and}~ $\bigwedge_{e \in \textit{keys}(D)} D[e] \leq D'[e]$
     \EndFunction
     \State
@@ -288,6 +282,10 @@ In contrast to Last-Writer-Wins Sets (LWW-Sets)~\cite{shapiro:inria-00555588}, n
 %
 %The \textit{longest sequence wins} is reminiscent of Bitcoin~\cite{nakamoto2008bitcoin}'s \textit{longest chain wins}. 
 
+%\todo{Compare to this}
+%
+%Stephen Dolan. Brief announcement: The only undoable CRDTs are counters. In 39th Symposium on Principles of Distributed Computing, PODC 2020, page 57–58. ACM, August 2020. [ bib | DOI | arXiv ]
+%Keywords: set-crdt, counters, undo
 
 \section{Conclusion and Future Work}
 \label{sec:conclusion}
@@ -301,9 +299,9 @@ We plan to extend the design to arbitrary (Byzantine) failures in the future and
 
 We thank Christian F. Tschudin for fostering a research environment allowing detours and playfulness in the process, as well as providing financial support for this work and feedback on early drafts. 
 
-The current specification using a single counter and state testing on even-oddness was jointly suggested by Christian F. Tschudin and Ramon Locher during a CRDT Seminar at University of Basel during the Spring Semester of 2023. Our original formulation used two counters instead that tracked additions and removals individually.
+The current specification using a single counter and state testing on even-oddness was jointly rediscovered in collaboration with Christian F. Tschudin and Ramon Locher during a CRDT Seminar at University of Basel during the Spring Semester of 2023. It was a small disappointment, after a literature review, to realize we were 4 years too late to claim originality.
 
-We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer for feedback on early versions of the design, and the material I had prepared for the CRDT seminar. Those discussions have informed the design and presentation.
+We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer for feedback on early versions of the paper, and the material I had prepared for the CRDT seminar. Those discussions have informed the design and presentation.
 
 \newpage
 
