@@ -1,4 +1,4 @@
-\documentclass[10pt, oneside]{article}   	% use "amsart" instead of "article" for AMSLaTeX format
+\documentclass[9pt, oneside]{article}   	% use "amsart" instead of "article" for AMSLaTeX format
 \usepackage{geometry}                		% See geometry.pdf to learn the layout options. There are lots.
 \geometry{a4paper}                   		% ... or a4paper or a5paper or ... 
 %\geometry{landscape}                		% Activate for rotated page geometry
@@ -23,7 +23,7 @@
 
 
 \begin{abstract}
-The 2P-Set Conflict-Free Replicated Data Type (CRDT) supports two phases for each possible element: in the first phase an element can be added to the set and the subsequent additions are ignored; in the second phase an element can be removed after which it will stay removed forever regardless of subsequent additions and removals. We generalize the 2P-Set to support an infinite sequence of alternating additions and removals of the same element. In the presence of concurrent additions and removals on different replicas, all replicas will eventually converge to the longest sequence of alternating additions and removals that follows causal history across replicas. 
+The 2P-Set Conflict-Free Replicated Data Type (CRDT) supports two phases for each possible element: in the first phase an element can be added to the set and the subsequent additions are ignored; in the second phase an element can be removed after which it will stay removed forever regardless of subsequent additions and removals. We generalize the 2P-Set to support an infinite sequence of alternating additions and removals of the same element. In the presence of concurrent additions and removals on different replicas, all replicas will eventually converge to the longest sequence of alternating additions and removals that follows causal history. 
 
 The idea of converging on the longest-causal sequence of opposite operations had already been suggested in the context of an undo-redo framework but the design was neither given a name nor fully developed. In this paper, we present the full design directly, using nothing more than the basic formulation of state-based CRDTs. We also show the connection between the set-based definition of 2P-Set and the counter-based definition of the $\infty$P-Set with simple reasoning. We then give detailed proofs of convergence. The underlying \textit{grow-only dictionary of grow-only counters} on which the $\infty$P-Set is built may be used to build other state-based CRDTs. In addition, this paper should be useful as a pedagogical example for designing state-based CRDTs, and might help raise the profile of CRDTs based on \textit{longest sequence wins}.
 \end{abstract}
@@ -48,8 +48,8 @@ Similar to the T-Set~\cite{Dolan2020undoable} and unnamed predecessor~(\cite{Yu2
 
 In the rest of this paper\footnote{Sources for this paper are also available here: \url{https://github.com/cn-uofbasel/infinite-P-Set}. Pull-requests to suggest corrections are welcome.}, we make the following contributions:
 \begin{itemize}
-	\item We present the complete design of an $\infty$P-Set. In contrast to the aforementioned undo-redo framework~\cite{Yu2019undo} which introduces its own formalism, we rely on nothing more than the base formalism of state-based CRDTs (Section~\ref{sec:specification}). Our explanation of the connection between the 2P-Set and the $\infty$P-Set is also simpler than that the presentation of the T-Set~\cite{Dolan2020undoable}: the latter relies on group theory which most undergrad computer science and practitioners are unlikely to have been exposed to;
-	\item We provide a proof that $\infty$P-Set is indeed a state-based CRDT, with a high-level overview in Section~\ref{sec:proofs:convergence} and a detailed presentation in Appendix~\ref{sec:longer-proofs:convergence}. The underlying \textit{grow-only dictionary of grow-only counters} may also be useful for building more sophisticated state-based CRDTs. The proofs are written in the structured style advocated by Lamport~\cite{lamport2012write} and only assume background on discrete mathematics, making them useful as pedagogical example for undergrad students and practioners;
+	\item We present the complete design of an $\infty$P-Set. In contrast to the aforementioned undo-redo framework~\cite{Yu2019undo} which introduces its own formalism, we rely on nothing more than the base formalism of state-based CRDTs (Section~\ref{sec:specification}). Our explanation of the connection between the 2P-Set and the $\infty$P-Set is also simpler than the presentation of the T-Set~\cite{Dolan2020undoable}: the latter relies on group theory which most undergrad computer science and practitioners are unlikely to have been exposed to;
+	\item We provide a proof that $\infty$P-Set is indeed a state-based CRDT, with a high-level overview in Section~\ref{sec:proofs:convergence} and a detailed presentation in Appendix~\ref{sec:longer-proofs:convergence}. The underlying \textit{grow-only dictionary of grow-only counters} may also be useful for building more sophisticated state-based CRDTs. The proofs are written in the structured style suggested by Lamport~\cite{lamport2012write} and only assume background on discrete mathematics, making them useful as pedagogical example for undergrad students and practitioners;
 \end{itemize}
 
 In addition, we also discuss the lower memory consumption of an $\infty$P-Set compared to an OR-Set or LWW-Set (Section~\ref{sec:resource-consumption}). We then conclude with a summary and some directions for future work (Section~\ref{sec:conclusion}).
@@ -64,31 +64,31 @@ In this section, we first present how the design is an extension of a 2P-Set (Se
 \subsection{From 2P-Set to $\infty$P-Set}
 \label{sec:intuition}
 
-Our design is a generalization of the behaviour of the 2P-Set~\cite{shapiro:inria-00555588}, which we show in progressive steps. 
+Our design is a generalization of the behaviour of the 2P-Set~\cite{shapiro:inria-00555588}, which we show as follows. 
 
 In a 2P-Set, an element $e$ can either be \textit{in} a set $S$ ($e \in S$) or \textit{out} of the same set ($e \notin S$). An element is initially out of the set. After an addition \textit{add(e)}, the element is in the set, which corresponds to the first phase. Any subsequent addition of $e$ does not change the state of $S$. After a removal \textit{remove(e)}, $e$ is then considered out of the set forever, which corresponds to the second phase.
 
-A 2P-Set is implemented by combining 2 \textit{grow-only sets} $A$ and $R$. $A$ tracks additions, and is accordingly called the \textit{add-set}; $R$ tracks removals, and is accordingly called the \textit{remove-set} (or \textit{tombstones} set). The \textit{add(e)} operation adds $e$ to the add-set $A$. The \textit{remove(e)} operation adds $e$ to the remove-set $R$, only if $e$ is already in the add-set $A$. The element $e$ is considered in $S$ if and only if $e$ is in the difference of $A$ and $R$, \textit{i.e.} $e \in S \Leftrightarrow e \in (A\backslash R)$. Merging two states $S_1 = (A_1, R_1)$ and $S_2 = (A_2, R_2)$ is simply the union of their components, \textit{i.e.} $(A_1 \cup A_2, R_1 \cup R_2)$.
+A 2P-Set is implemented by combining 2 \textit{grow-only sets} $A$ and $R$. $A$ tracks additions, and is accordingly called the \textit{add-set}; $R$ tracks removals, and is accordingly called the \textit{remove-set} (or \textit{tombstones} set). The \textit{add(e)} operation adds $e$ to the add-set $A$. The \textit{remove(e)} operation adds $e$ to the remove-set $R$, only if $e$ is already in the add-set $A$. The element $e$ is considered in $S$ if and only if $e$ is in the difference of $A$ and $R$, \textit{i.e.} $e \in S \Leftrightarrow e \in (A\backslash R)$. Merging two states $(A_1, R_1)$ and $(A_2, R_2)$ is simply the union of their components, \textit{i.e.} $(A_1 \cup A_2, R_1 \cup R_2)$.
 
-The 2P-Set can be extended to a 4P-Set by adding another pair of \textit{grow-only sets}, so that the state of $S$ can be described by two pairs of add-remove-sets $(A_1,R_1,A_2,R_2)$.  This enables $e$ to be added, then removed, then added again, then removed one last time before staying removed forever. During an \textit{add(e)} operation, if $e$ is not in any of the components of a set $S$, it is added to $A_1$; if it is in both in $A_1$ and $R_1$, it is added to $A_2$; otherwise, the \textit{add(e)} is ignored. Similarly, during a \textit{remove(e)} operation, if $e$ is only in $A_1$, $e$ is added to $R_1$; if $e$ is in $A_1$, $R_1$, and $A_2$, $e$ is added to $R_2$; otherwise the \textit{remove(e)} is ignored. The element $e$ is considered in the set $S$ if and only if the set difference of either pair includes $e$, \textit{i.e.} $e \in S \Leftrightarrow e \in  ((A_1 \backslash R_1) \cup (A_2 \backslash R_2))$. Merging is simply the element-wise union of components.
+The 2P-Set can be extended to a 4P-Set by adding another pair of \textit{grow-only sets}, so that the state of $S$ can be described by two pairs of add-remove-sets $(A_1,R_1,A_2,R_2)$.  This enables $e$ to be added, then removed, then added again, then removed one last time before staying removed forever. During an \textit{add(e)} operation, if $e$ is not in any of the components, it is added to $A_1$; if it is in both in $A_1$ and $R_1$, it is added to $A_2$; otherwise, the \textit{add(e)} is ignored. Similarly, during a \textit{remove(e)} operation, if $e$ is only in $A_1$, $e$ is added to $R_1$; if $e$ is in $A_1$, $R_1$, and $A_2$, $e$ is added to $R_2$; otherwise the \textit{remove(e)} is ignored. The element $e$ is considered in the set $S$ if and only if the set difference of either pair includes $e$, \textit{i.e.} $e \in S \Leftrightarrow e \in  ((A_1 \backslash R_1) \cup (A_2 \backslash R_2))$. Merging is simply the element-wise union of components.
 
 The 2P-Set can be extended to an $\infty$P-Set by adding an infinite number of add-remove-set pairs $(A_1, R_1, A_2, R_2, \dots)$. Manipulating an infinite number of sets is unwieldy, so instead we can track the number of add-sets and remove-sets 
-$e$ is included in: if $e$ is in all add-sets up to $A_i$ and all remove-sets up to $R_{j}$, we simply store the state of $e$ as $(i, j)$. Furthermore, because the state of $e$ is strictly alternating between being in and out of $S$, and $i$ and $j$ monotonically grow as $e$ is further added and removed, we can simply map the state of $e$ to a single positive integer $k=i+j$. The element $e$ is in $S$ if and only if $k$ is odd otherwise it is out of $S$, \textit{i.e.} $e \in S \Leftrightarrow odd(k)$. Merging the state of $e$ in $S_1$ and $e$ in $S_2$ corresponds to taking the maximum value of the corresponding counters, \textit{i.e.} $\textit{max}(k_1, k_2)$, which accordingly is determined by the longest sequence of \textit{add(e)} and \textit{remove(e)} that happened across replicas. 
+$e$ is included in: if $e$ is in all add-sets up to $A_i$ and all remove-sets up to $R_{j}$, we simply store the state of $e$ as $(i, j)$. Furthermore, because the state of $e$ is strictly alternating between being in and out of $S$, and $i$ and $j$ monotonically grow as $e$ is further added and removed, we can simply map the state of $e$ to a single positive integer $k=i+j$. The element $e$ is in $S$ if and only if $k$ is odd otherwise it is out of $S$, \textit{i.e.} $e \in S \Leftrightarrow odd(k)$. Merging the state of $e$ in $S$ and $e$ in $S'$ corresponds to taking the maximum value of the corresponding counters, \textit{i.e.} $\textit{max}(k, k')$, which accordingly is determined by the longest sequence of \textit{add(e)} and \textit{remove(e)} that happened across replicas. 
 
 \subsection{State and Operations}
 \label{sec:data-type}
 
 The behaviour of the $\infty$P-Set is listed in Algorithm~\ref{alg:inf-p-set} following existing conventions~\cite{shapiro:inria-00555588}.  The state of the CRDT is implemented as a dictionary $D$ that 
-maps unique elements to a single positive integer. The corresponding set $S$ is obtained by querying the dictionary, \textit{i.e.} $S=\texttt{query}(D)$. The same set $S$ might be implemented by different valid dictionaries so the inverse relationship is ambiguous. Nonetheless, to simplify our exposition we sometimes reason about the state of $S$ then mention the corresponding dictionary $D$. In that case, keep in mind however that only $D$ is updated by operations while $S$ is a \textit{view} on $D$. Moreover, all operations are specified in a functional style, with the first argument being the current state $D$ and the return value being the modified state $D'$ or $D''$. This makes the algorithm easier to associate with the proofs (Section~\ref{sec:proofs}). A practical implementation might instead encapsulate the state, in an object for example.
+maps unique elements to a single positive integer. The corresponding set $S$ is obtained by querying the dictionary, \textit{i.e.} $S=\texttt{query}(D)$. The same set $S$ might be implemented by different valid dictionaries so the inverse relationship is ambiguous. All operations are specified in a functional style. When an operation modifies the state, its first argument is the current state $D$ and its return value is the modified state $D'$ or $D''$. This makes the algorithm easier to associate with the proofs (Section~\ref{sec:proofs}). A practical implementation might instead encapsulate the state, in an object for example.
 
 Operations are the followings:
 \begin{itemize}
 
-	\item \texttt{Initialize} creates a new $\infty$P-Set replica. After initialization, the state of the replica, $D$, is an empty dictionary. 
+	\item $D=\texttt{Initialize}()$ creates a new $\infty$P-Set replica. After initialization, the state of the replica, $D$, is an empty dictionary. 
 
-	\item $S=\texttt{Query}(D)$ returns the set $S$ corresponding to the dictionary $D$. $S$ contains the elements that are currently in $S$, \textit{i.e.}, all elements in $D$ that are associated to an \textit{odd} integer counter.
+	\item $S=\texttt{Query}(D)$ returns the set $S$ corresponding to the dictionary $D$. $S$ contains the elements that are currently in $S$, \textit{i.e.}, all elements in $D$ associated with an \textit{odd} integer counter.
 
-	\item $D'=\texttt{Add}(D,e)$ adds the element $e$ to the set represented by $D$, returning a new dictionary $D'$.  Adding $e$ when $e$ is already in the set, \textit{i.e.}, $D[e]$ exists and is odd, is ignored and $D'=D$. Otherwise, if $e$ had never been added before, $e$ is not in the keys of $D$: $e$ is added and its counter is initialized to 1, \textit{i.e.}, $D'[e] = 1$. Finally, if $e$ has been added before but the last operation was a \texttt{remove}, $e$ is in $D$ and $D[e]$ is even: $D'[e] = D[e] + 1$, making it odd and effectively adding $e$ back in the set.
+	\item $D'=\texttt{Add}(D,e)$ adds the element $e$ to the set represented by $D$, returning a new dictionary $D'$.  Adding $e$ when $e$ is already in the set, \textit{i.e.}, $D[e]$ exists and is odd, is ignored and $D'=D$. Otherwise, if $e$ had never been added before ($e$ is not in the keys of $D$): $e$ is added and its counter is initialized to 1, \textit{i.e.}, $D'[e] = 1$. Finally, if $e$ has been added before but the last operation was a \texttt{remove} ($e$ is in $D$ and $D[e]$ is even): $D'[e] = D[e] + 1$, making it odd and effectively adding $e$ back in the set.
 
 \item $D'=\texttt{Remove}(D, e)$ removes the element $e$ from the set represented by $D$, returning a new dictionary $D'$. The element $e$ might not be in the set either because it was never added before, in which case $e$ won't be in $D$, or because it was previously removed, in which case $D[e]$ is even. In both cases, the remove operation is ignored. Otherwise, the last operation on $e$ was an \texttt{add} and $D[e]$ is odd. In that case, $D'[e]=D[e]+1$, making $D'[e]$ even and effectively removing $e$ from the set.
 
@@ -153,10 +153,10 @@ Operations are the followings:
 \subsection{Causal and Concurrent Behaviour}
 \label{sec:causal-concurrent-behaviour}
 
-The full behaviour of an $\infty$P-Set implies the followings, starting from an initial state $D$ and two operations $\textit{add}_r(e)$ and $\textit{remove}_{r'}(e)$ respectively happening on replicas $r$ and $r'$ and a final state $D'$ after both replicas $r$ and $r'$ have merged. The corresponding sets are $S=\texttt{query}(D)$ and $S'=\texttt{query}(D')$:
+The full behaviour of an $\infty$P-Set implies the followings. Assume an initial state $D$ and two operations $\textit{add}_r(e)$ and $\textit{remove}_{r'}(e)$ respectively happening on replicas $r$ and $r'$ and a final state $D'$ after both replicas $r$ and $r'$ have merged. The corresponding sets are $S=\texttt{query}(D)$ and $S'=\texttt{query}(D')$:
 \begin{enumerate}
 	\item If $\textit{add}_r(e)$ happens before $\textit{remove}_{r'}(e)$ ($\textit{add}_r(e)\rightarrow \textit{remove}_{r'}(e)$) then eventually $e \notin S'$ on $r$ and $r'$ regardless of the state of $e$ in $S$;
-	\item else if $\textit{remove}_{r'}(e)$ happens before $\textit{add}_{r}(e)$ ($\textit{remove}_{r'}(e) \rightarrow  \textit{add}_r(e)$) then eventually $e \in S'$ on $r$ and $r'$ regardless of the state of $e$ in $S$;
+	\item  If $\textit{remove}_{r'}(e)$ happens before $\textit{add}_{r}(e)$ ($\textit{remove}_{r'}(e) \rightarrow  \textit{add}_r(e)$) then eventually $e \in S'$ on $r$ and $r'$ regardless of the state of $e$ in $S$;
 	\item else both are concurrent ($add_r(e) ~||~ remove_{r'}(e)$) and the result depends on $S$:
 	    \begin{enumerate}
 		\item	 If $e \in S$ ($D[e]$ is odd) then $add_r(e)$ has no effect, $remove_{r'}(e)$ wins, and eventually $e \notin S'$ on $r$ and $r'$;
@@ -164,17 +164,19 @@ The full behaviour of an $\infty$P-Set implies the followings, starting from an 
 	    \end{enumerate}
 \end{enumerate}
 
-If replicas $r$ and $r'$ are in different states, there still exists a common state $D$ they both were in in the past (the initial state if nothing else), and from that point, the longest alternating sequence $D \rightarrow \textit{add(e)} \rightarrow \textit{remove(e)}\rightarrow \textit{add}(e) \rightarrow \dots$ across replicas determines the final state.
+If replicas $r$ and $r'$ are in different states, there still exists a common state $D$ they shared in the past (the initial state if nothing else), and from that point, the longest alternating sequence $D \rightarrow \textit{add(e)} \rightarrow \textit{remove(e)}\rightarrow \textit{add}(e) \rightarrow \dots $ across replicas determines the final state.
 
 \subsection{System Model}
 \label{sec:system-model}
 
-As customary for state-based CRDTs~\cite{shapiro:inria-00555588}, Algorithm~\ref{alg:inf-p-set} only assumes an underlying unreliable communication channel that eventually delivers  a message (possibly mutiple times) if the message is sent infinitely often. Moreover,  it assumes that transitive connectivity between replicas exists. Replicas may become unresponsive for arbitrarily long and infinitely often as long as they do eventually recover after each failure.
+As customary for state-based CRDTs~\cite{shapiro:inria-00555588}, Algorithm~\ref{alg:inf-p-set} only assumes an underlying unreliable communication channel that eventually delivers  a message (possibly mutiple times) if the message is sent infinitely often. This message is used to merge the state of two different replicas. In addition, transitive connectivity between replicas is assumed so that any update may reach any replica, even if indirectly. Finally, replicas may become unresponsive for arbitrarily long and infinitely often as long as they do eventually recover and merge state updates after each failure.
 
 Note that Algorithm~\ref{alg:inf-p-set} does not tolerate arbitrary faults: a malicious replica may single-handedly determine the state of an element in the set by simply choosing a counter value arbitrarily large.
 
 \section{Proof Sketches}
 \label{sec:proofs}
+
+In this section, we provide proof sketches. Please see Appendix~\ref{sec:longer-proofs:convergence} for more detailed proof steps.
 
 \subsection{Convergence}
 \label{sec:proofs:convergence}
@@ -183,7 +185,7 @@ To establish convergence, we need to show that a state-based CRDT definition is 
 \begin{itemize}
 	\item The \textit{set of possible states} $\mathds{S}$: in the case of an $\infty$P-Set, this is the set of all possible dictionaries that associate an element $e$, out of all possible elements $E$ that could be stored, to an integer greater than zero that represents the state of $e$ in the set $S = \texttt{query}(D)$. The state of a given replica $D$ at any time is always one of those of $\mathds{S}$, \textit{i.e.} $D \in \mathds{S}$;
 	\item A \textit{partial order} $\leq$ with which we can compare two states $D, D' \in \mathds{S}$ such that $D \leq D'$ if and only if the the set of updates that led to $D$ is a subset of the updates that led to $D'$. This is equivalent to say that $D \leq D'$ if and only if $D$ is the same as $D'$ or has happened before $D'$;
-	\item An \textit{initial state} for all replicas $D_0$ such that $D_0 \in \mathds{S}$ onto which all possible sequences of updates are applied: which in the case of a $\infty$P-Set is an empty dictionary and created by \texttt{Initialize};
+	\item An \textit{initial state} $D_0$ for all replicas such that $D_0 \in \mathds{S}$ onto which all possible sequences of updates are applied. In the case of a $\infty$P-Set, $D_0$ is an empty dictionary and created by \texttt{Initialize};
 	\item A \textit{set of query operations} $Q$ that do not modify the state: which in the case of an $\infty$P-Set is $\{ \texttt{Query}, \texttt{Compare} \}$;
 	\item A \textit{set of update operations} $U$ that do modify the state (but not necessarily for all combination of state and arguments): which in the case of an $\infty$P-Set is $\{ \texttt{Add}, \texttt{Remove} \}$;
 	\item A \textit{merge} operation $m$ that may potentially modify the state: which in the case of an $\infty$P-Set is ${ \texttt{Merge} }$.
@@ -204,16 +206,7 @@ To establish that our state-based CRDT definition is a monotonic semi-lattice, w
 	\begin{proof}
 		\pfsketch~ \texttt{Compare} is the conjunction of the $\subseteq$ and $\leq$ relationships, respectively forming partial orders on sets and natural numbers that compose the possible states. The conjunction of partial orders is also a partial order.		
 	\end{proof}
-	%		 \texttt{Compare} establishes a partial order that is the conjunction of the properties of partial ordering of Grow-Only Sets and the total ordering of Max-Counters: given two $\infty$P-Set with corresponding internal states represented respectively as the dictionaries $D$ and $D'$, $D$ is smaller or equal than $D'$ ($D \leq D'$) if and only if: 
-% \begin{enumerate}
-%     \item the keys of $D$ are a subset of those of $D'$ ($\textit{keys}(D) \subseteq \textit{keys}(D')$) which corresponds to the partial ordering of a Grow-Only Set; 
-%     \item for each key $e$ present both in $D$ and $D'$, the counter for $e$ in $D$, ($D[e]$) is smaller or equal than the counter for $e$ in $D'$ ($D[e] \leq D'[e]$) which corresponds to the total ordering of Max-Counters. 
-% \end{enumerate}
-% 
-%Moreover, the subset relationship ($\subseteq$) is defined for all possible elements which can be stored in sets (and be keys to dictionaries), and the less-or-equal relationship ($\leq$) is defined for all integers, which can be counters for each element. 
-%
-%Therefore, the relationship defined by \texttt{compare} ($\leq$) forms a semi-lattice $L$ on all possible states of an $\infty$P-Set.	
-	
+
 	\step{label-lub}{\textit{(Least-Upper Bound)} \texttt{Merge} of states $D$ and $D'$ computes the LUB of $D$ and $D'$ in $\mathds{L}$.}
 	\begin{proof}
 			\pfsketch~ \texttt{Merge} is the conjunction of performing the union on keys and maximum values on counters, which both compute the least upper bound in $\mathds{L}$, respectively on keys and counters. In conditions in which the maximum value cannot be computed, the corresponding part of the state is equal to one of the state input, \textit{e.g.} $D$, and the relationship to the other state input, \textit{e.g.} $D'$, can safely be ignored.
@@ -227,7 +220,7 @@ To establish that our state-based CRDT definition is a monotonic semi-lattice, w
 
 	\qedstep
 	\begin{proof}
-		\pf By definition, \stepref{label-ordering}, \stepref{label-lub}, \stepref{label-monotonicity} imply that $\infty$P-Set is a state-based CRDT. See Appendix~\ref{sec:longer-proofs:convergence} for more detailed proof steps.
+		\pf By definition, \stepref{label-ordering}, \stepref{label-lub}, \stepref{label-monotonicity} imply that $\infty$P-Set is a state-based CRDT. 
 	\end{proof}
 \end{proof}
 
@@ -260,27 +253,11 @@ Third, whenever two replicas $r$ and $r'$ issue the same sequence of \textit{add
 \label{sec:resource-consumption}
 
 The overhead of the $\infty$P-Set is a single integer per element plus the associated containers. It can be implemented as a set of tuples $(e,c)$ where $e$ is the element and $c$ the associated counter. It can also be implemented as a hash-map: current language implementations usually represent integer literals as tagged pointers allowing counts to reach counts up to 
-$\frac{\textit{register size}}{2^\textit{tag bit-length}}$. In practice this reaches over billions on today's architectures which should cover most practical sequences of additions and removals. Up to the limit of literal integer representations, the memory consumption is constant.
+$\frac{\textit{register size}}{2^\textit{tag bit-length}}$. In practice this reaches over billions on today's architectures which should cover most practical sequences of additions and removals. Up to the limit of literal integer representations, the memory consumption per element is constant.
 
 In contrast to Observe-Remove Sets (OR-Sets)~\cite{shapiro:inria-00555588}, each add operation does not need to be tracked with a separate unique identifier and stored in a set. The OR-set uses memory proportional to the number of additions that have happened since the last removal, with one unique identifier for each, in addition to the size of the set container for each element that has ever been added in the set $S$.
 
 In contrast to Last-Writer-Wins Sets (LWW-Sets)~\cite{shapiro:inria-00555588}, no timestamps are required and only a single set (or dictionary) is needed, and garbage collection of stale tuples is unnecessary.
-
-%\section{Related Work}
-%\label{sec:related-work}
-%
-%% Other set designs
-%\cite{preguicca2018conflict}
-%Add-Wins, Remove-Wins, Last-Writer-Wins
-%
-%Contrast to Last-Writer-Wins
-%
-%The \textit{longest sequence wins} is reminiscent of Bitcoin~\cite{nakamoto2008bitcoin}'s \textit{longest chain wins}. 
-
-%\todo{Compare to this}
-%
-%Stephen Dolan. Brief announcement: The only undoable CRDTs are counters. In 39th Symposium on Principles of Distributed Computing, PODC 2020, page 57–58. ACM, August 2020. [ bib | DOI | arXiv ]
-%Keywords: set-crdt, counters, undo
 
 \section{Conclusion and Future Work}
 \label{sec:conclusion}
@@ -296,15 +273,13 @@ The current specification using a single counter and state testing on even-oddne
 
 We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer for feedback on early versions of the paper, and the material I had prepared for the CRDT seminar. Those discussions have informed the design and presentation.
 
-\newpage
-
 \bibliographystyle{plain}
 \bibliography{main}
 
 \newpage
 \appendix
 
-\section{Longer Proofs}
+\section{Detailed Proofs}
 
 \subsection{Convergence}
 \label{sec:longer-proofs:convergence}
@@ -313,13 +288,13 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 \define{\begin{pfenum}
 		\item \textit{(elements}) $E$ is the set of possible elements that can be stored in an $\infty$P-Set.
 		\item \textit{(natural numbers)} $\mathds{N}$ are the natural numbers, \textit{i.e.} the set of integers greater or equal to $0$.
-		\item \label{dict-state} \textit{(possible states)} The state of an $\infty$P-Set is a set $D$ of tuples $(e,c)$ such that $e \in E$ and counter value $c \in \mathds{N}$ representing a dictionary. The state space of all possible dictionaries, $\mathds{S}$, is the power set of the cartesian product of $E$ and $\mathds{N}$ with the constraint that for every $D \in \mathds{S}$ and among all tuples $(e,c) \in D$, a given element $e$ appears at most once.
+		\item \label{dict-state} \textit{(possible states)} The state of an $\infty$P-Set is a set $D$ of tuples $(e,c)$ such that $e \in E$ and counter value $c \in \mathds{N}$. $D$ represents a dictionary. The state space of all possible dictionaries, $\mathds{S}$, is the power set of the cartesian product of $E$ and $\mathds{N}$ ($\mathds{S} = \mathcal{P}(E \times \mathds{N})$) with the constraint that for every $D \in \mathds{S}$ and among all tuples $(e,c) \in D$, a given element $e$ appears at most once.
 		\item \label{dict-keys} \textit{(keys)} The keys of $D$ is the set of elements in $D$, \textit{i.e.} $keys(D) = \{ e : (e,c) \in D \}$.
 		\item \label{dict-counter} \textit{(counter)} The counter associated to $e$ in $D$, written $D[e]$, is the counter $c$ corresponding to the tuple $(e,c) \in D$, \textit{i.e.} $D[e] = c \Leftrightarrow (e,c) \in D$.
 		\item \label{dict-assignment} \textit{(dictionary assignment)} Assigning a counter value $c$ to a dictionary key $e$, written $D[e] \leftarrow c$, performs one of two actions: 
 		\begin{pfenum}
-			\item If $(e,c) \notin \textit{keys}(D)$, it adds a new tuple $(e,c)$ in $D$, \textit{i.e.} $D=D \cup \{ (e,c) \}$;
-			\item otherwise, it replaces the tuple with the same key $e$ with $(e,c)$, \textit{i.e.} $D=D \backslash \{ (e, c') \} \cup \{ (e, c) \}$.
+			\item If $(e,c') \notin \textit{keys}(D)$, it adds a new tuple $(e,c)$ in $D$, \textit{i.e.} $D=D \cup \{ (e,c) \}$;
+			\item otherwise, it replaces the tuple with $(e,c)$, \textit{i.e.} $D=D \backslash \{ (e, c') \} \cup \{ (e, c) \}$.
 		\end{pfenum}
 		\item \textit{(possible keys)} Dictionary keys $\mathds{K} = \{ \textit{keys}(D) : D \in \mathds{S} \}$.
 		\item \textit{(possible counters}) Counter values $\mathds{C} = \{ D[e] :  D \in \mathds{S} \wedge e \in \textit{keys}(D) \}$.
@@ -328,7 +303,7 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 
 \begin{proof}
         \prove{The $\infty$P-Set (Alg.~\ref{alg:inf-p-set}) is a state-based (convergent) CRDT.}
-	\pfsketch ~The $\infty$P-Set is the composition of state-based grow-only sets for dictionary keys and max-counters for dictionary values. The three properties of \textit{ordering}, \textit{least upper bound}, and \textit{monotonicity} that are sufficient to define a state-based CRDT are the conjunction of corresponding properties on grow-only sets and max-counters. For easier navigation, we prove each property in a separate subsection. 
+	\pfsketch ~The $\infty$P-Set is the composition of state-based grow-only sets for dictionary keys and max-counters for dictionary values. The three properties of \textit{ordering}, \textit{least upper bound}, and \textit{monotonicity} that are sufficient to define a state-based CRDT are the conjunction of corresponding properties on grow-only sets and max-counters.
 
 	\label{proof:state-crdt}
 \end{proof}
@@ -337,49 +312,50 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 \label{sec:longer-proofs:ordering}
 
 \begin{proof}
+	\assume{\begin{pfenum}
+		\item $D \in \mathds{S}$ and $D' \in \mathds{S}$ in the arguments of \texttt{compare}.
+	\end{pfenum}}
 	\prove{Ordering $\mathds{S}$ by \texttt{compare} forms a semi-lattice $\mathds{L}$.}
 		\pfsketch~ \texttt{Compare} is the conjunction of the $\subseteq$ and $\leq$ relationships, respectively forming partial orders on sets and natural numbers that compose the possible states. The conjunction of partial orders is also a partial order. A semi-lattice is a partial order on a set.
-		\assume{\begin{pfenum}
-			\item $D \in \mathds{S}$ and $D' \in \mathds{S}$ in the arguments of \texttt{compare}.
-		\end{pfenum}}
+
 		%\begin{proof}
 		%	\pf The state of any dictionary $D \in \mathds{S}$ can be viewed as a set of tuples $(e,c)$ composed of an element $e \in E$ and a natural counter $c$ such that $c \geq 0$.
 		%\end{proof}
-		\step{label-1}{\prove{All possible dictionary keys $\mathds{K}$ are partially ordered by $\subseteq$.}}
+		\step{label-1}{All possible dictionary keys $\mathds{K}$ are partially ordered by $\subseteq$.}
 		\begin{proof}
 		
 			\step{label-1.1}{$\mathds{K}$ is a powerset of elements, \textit{i.e.} $\mathds{K} = \mathcal{P}(E)$}
 			\begin{proof}
-				\pf~By definitions \ref{dict-state} and \ref{dict-keys}.
+				By definitions \ref{dict-state} and \ref{dict-keys}.
 			\end{proof}
 			
 			\step{label-1.2}{Sets are partially ordered by $\subseteq$.}
 			\begin{proof}
-				\pf~ The subset relationship $\subseteq$ is \textit{reflexive}, \textit{antisymmetric}, and \textit{transitive} therefore sets ordered by $\subseteq$ are partially-ordered (see below for the definitions of each).
+				The subset relationship $\subseteq$ is \textit{reflexive}, \textit{transitive}, and \textit{antisymmetric},  therefore sets ordered by $\subseteq$ are partially-ordered.
 			\end{proof}
 			
 			\qedstep
 			 \begin{proof}
-			  	\pf~\stepref{label-1.1} and \stepref{label-1.2} implies $\mathds{K}$ is partially ordered by $\subseteq$.
+			  	By \stepref{label-1.1} and \stepref{label-1.2}.
 			\end{proof}
 		\end{proof}
 		
-		\step{label-2}{\prove{All possible counter values $\mathds{C}$ are partially ordered by $\leq$.}}
+		\step{label-2}{All possible counter values $\mathds{C}$ are partially ordered by $\leq$.}
 		\begin{proof}
 		
 			\step{label-2.1}{$\mathds{C}$ is the set of natural numbers, \textit{i.e.} $\mathds{C} = \mathds{N}$}
 			\begin{proof}
-				\pf~By definitions \ref{dict-state} and \ref{dict-counter}.
+				By definitions \ref{dict-state} and \ref{dict-counter}.
 			\end{proof}
 			
 			\step{label-2.2}{Natural numbers are partially ordered by $\leq$.}
 			\begin{proof}
-				\pf~The less or equal relationship $\leq$ is \textit{reflexive}, \textit{transitive}, and \textit{antisymmetric}, forming a partial order, as well as \textit{strongly connected} making that partial order actually total, which is stronger than necessary.
+				The less or equal relationship $\leq$ is \textit{reflexive}, \textit{transitive}, and \textit{antisymmetric}.
 			\end{proof}
 
 			\qedstep
 			\begin{proof}
-				\pf~\stepref{label-2.1} and \stepref{label-2.2} implies $\mathds{C}$ is partially ordered by $\leq$.
+				By \stepref{label-2.1} and \stepref{label-2.2}.
 			\end{proof}
 		\end{proof}
 		
@@ -397,37 +373,37 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 			\pfsketch~ $\tau$ is also \textit{reflexive}, \textit{transitive}, and \textit{antisymmetric} because of the associativity of $\wedge$. The three properties are sufficient to define a partial order.
 			\step{label-3.0}{$\alpha$ and $\beta$ are both \textit{reflexive}, \textit{transitive}, and \textit{antisymmetric}.}
 			\begin{proof}
-				\pf~ By definition because partial order relations must be \textit{reflexive}, \textit{transitive}, and \textit{antisymmetric}.
+				By definition because partial order relations must be \textit{reflexive}, \textit{transitive}, and \textit{antisymmetric}.
 			\end{proof}
 	
 			\step{label-3.1}{$\tau$ is reflexive: $a ~\tau~ a = true$.}
 			\begin{proof}
-				\pf~ $a ~\tau~ a = (a ~\alpha~ a) \wedge (a ~\beta~ a) = true$ because  $\alpha$ and $\beta$ are also reflexive.
+				$a ~\tau~ a = (a ~\alpha~ a) \wedge (a ~\beta~ a) = true$ because  $\alpha$ and $\beta$ are also reflexive.
 			\end{proof}
 			
 			\step{label-3.2}{$\tau$ is transitive:  $(a ~\tau~ b) \wedge (b ~\tau~ c) \Rightarrow a ~\tau~ c$.}
 			\begin{proof}
 				\step{label-3.2.1}{$(a ~\tau~ b) \wedge (b ~\tau~ c) =  ((a ~\alpha~ b) \wedge (a ~\beta~ b)) \wedge ((b ~\alpha~ c) \wedge (b ~\beta~ c))$}
 				\begin{proof}
-					\pf~ By substitution of $\tau$ definition.
+					By substitution of $\tau$ definition.
 				\end{proof}
 				\step{label-3.2.2}{$ ((a ~\alpha~ b) \wedge (a ~\beta~ b)) \wedge ((b ~\alpha~ c) \wedge (b ~\beta~ c)) = ((a ~\alpha~ b) \wedge (b ~\alpha~ c)) \wedge ((a ~\beta~ b) \wedge (b ~\beta~ c))$}
 				\begin{proof}
-					\pf~ By associativity of $\wedge$ (and) relation.
+					By associativity of $\wedge$ (and) relation.
 				\end{proof}
 				\step{label-3.2.3}{$((a ~\alpha~ b) \wedge (b ~\alpha~ c)) \wedge ((a ~\beta~ b) \wedge (b ~\beta~ c)) = (a ~\alpha~ c) \wedge (a ~\beta~ c)$}
 				\begin{proof}
-					\pf~ By transitivity of $\alpha$ and $\beta$ (\stepref{label-3.0}).
+					By transitivity of $\alpha$ and $\beta$ (\stepref{label-3.0}).
 				\end{proof}
 				
 				\step{label-3.2.4}{$ (a ~\alpha~ c) \wedge (a ~\beta~ c) = (a ~\tau~ c)$}
 				\begin{proof}
-					\pf~ By definition \ref{label-def-conj-partial-orders} in \stepref{label-3}.
+					By definition \ref{label-def-conj-partial-orders} in \stepref{label-3}.
 				\end{proof}
 				
 				\qedstep
 				\begin{proof}
-					\pf~  \stepref{label-3.2.1} $=$ \stepref{label-3.2.2} $=$ \stepref{label-3.2.3} $=$ \stepref{label-3.2.4}, therefore $(a ~\tau~ b) \wedge (b ~\tau~ c) \Rightarrow  (a ~\tau~ c)$
+					\stepref{label-3.2.1} $=$ \stepref{label-3.2.2} $=$ \stepref{label-3.2.3} $=$ \stepref{label-3.2.4}, therefore $(a ~\tau~ b) \wedge (b ~\tau~ c) \Rightarrow  (a ~\tau~ c)$
 				\end{proof}
 			\end{proof}
 			
@@ -435,33 +411,33 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 			\begin{proof}
 				\step{label-3.3.1}{$(a ~\tau~ b) \wedge (b ~\tau~ a) =  ((a ~\alpha~ b) \wedge (a ~\beta~ b)) \wedge ((b ~\alpha~ a) \wedge (b ~\beta~ a))$}
 				\begin{proof}
-					\pf~ By substitution of $\tau$ definition.
+					By substitution of $\tau$ definition.
 				\end{proof}
 				
 				\step{label-3.3.2}{$ ((a ~\alpha~ b) \wedge (a ~\beta~ b)) \wedge ((b ~\alpha~ a) \wedge (b ~\beta~ a)) = ((a ~\alpha~ b) \wedge (b ~\alpha~ a)) \wedge ((a ~\beta~ b) \wedge (b ~\beta~ a))$}
 				\begin{proof}
-					\pf~ By associativity of $\wedge$ (and) relation.
+					By associativity of $\wedge$ (and) relation.
 				\end{proof}
 				
 				\step{label-3.3.3}{$((a ~\alpha~ b) \wedge (b ~\alpha~ a)) \wedge ((a ~\beta~ b) \wedge (b ~\beta~ a)) = (a = b) \wedge (a = b)$}
 				\begin{proof}
-					\pf~ By antisymmetry of $\alpha$ and $\beta$ (\stepref{label-3.0}).
+					By antisymmetry of $\alpha$ and $\beta$ (\stepref{label-3.0}).
 				\end{proof}
 				
 				\step{label-3.3.4}{$ (a = b) \wedge (a = b) = (a = b)$}
 				\begin{proof}
-					\pf~ Tautologie.
+					Tautologie.
 				\end{proof}
 				
 				\qedstep
 				\begin{proof}
-					\pf~  \stepref{label-3.3.1} $=$ \stepref{label-3.3.2} $=$ \stepref{label-3.3.3} $=$ \stepref{label-3.3.4}, therefore $(a ~\tau~ b) \wedge (b ~\tau~ a) \Rightarrow  (a=b)$
+					\stepref{label-3.3.1} $=$ \stepref{label-3.3.2} $=$ \stepref{label-3.3.3} $=$ \stepref{label-3.3.4}
 				\end{proof}
 			\end{proof}
 			
 			\qedstep
 			\begin{proof}
-				\pf~ \stepref{label-3.1}, \stepref{label-3.2}, and \stepref{label-3.3} imply that $\tau$ is a partial order.
+				By \stepref{label-3.1}, \stepref{label-3.2}, and \stepref{label-3.3}, which is the definition of a partial order.
 			\end{proof}
 		\end{proof}
 			
@@ -471,31 +447,31 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 				\end{pfenum}}
 				\prove{$\bigwedge_{e \in \textit{keys}(D)} D[e] \leq D'[e]$ is a partial order}}
 			\begin{proof}
-				\pf~ Because of Assumption~\ref{subset}, $e \in \textit{keys}(D')$ as well, therefore both $D[e]$ and $D'[e]$ are defined. Because \stepref{label-2}, $\leq$ is a partial order over counters of $D$ and $D'$ for element $e$. Because \stepref{label-3}, the pairwise conjunction of partial orders is also a partial order, and therefore the conjunction over all keys of $D$ is also a partial order. Note that contrary to the next step, there is no logical dependency between the partial orderings of individual keys so the conjunction directly applies.
+				Because of Assumption~\ref{subset}, $e \in \textit{keys}(D')$ as well, therefore both $D[e]$ and $D'[e]$ are defined. Because \stepref{label-2}, $\leq$ is a partial order over counters of $D$ and $D'$ for element $e$. Because \stepref{label-3}, the pairwise conjunction of partial orders is also a partial order, and therefore the conjunction over all keys of $D$ is also a partial order. Note that contrary to the next step, there is no logical dependency between the partial orderings of individual keys so the conjunction directly applies.
 			\end{proof}
 			
 			\step{label-5}{The conjunction of $\textit{keys}(D) \subseteq \textit{keys}(D')$ and \stepref{label-4} is a partial order.}
 			\begin{proof}
-				\pfsketch~ There is a dependency from the left-hand side of the conjunction to the right-hand side because the left-hand side is a necessary assumption to compute the right-hand side. The partial order is therefore the conjunction of both when the left-hand side is true, otherwise only the left-hand side is used.
+				\pfsketch~ There is a logical dependency from the left-hand side of the conjunction to the right-hand side because the left-hand side is a necessary assumption to compute the right-hand side. The partial order is therefore the conjunction of both when the left-hand side is true, otherwise only the left-hand side is used.
 				\step{label-5.1}{\case{$\textit{keys}(D) \subseteq \textit{keys}(D')$ is true}}
 				\begin{proof}
-					\pf~Then Assumption~\ref{subset} of \stepref{label-4} is satisfied and the resulting partial order is their conjunction. $\textit{keys}(D) \subseteq \textit{keys}(D')$ is a partial order because \stepref{label-1}. The conjunction with \stepref{label-4} is also a partial order because of \stepref{label-3}.
+					Then Assumption~\ref{subset} of \stepref{label-4} is satisfied and the resulting partial order is their conjunction. $\textit{keys}(D) \subseteq \textit{keys}(D')$ is a partial order because \stepref{label-1}. The conjunction with \stepref{label-4} is also a partial order because of \stepref{label-3}.
 				\end{proof}
 				
 				\step{label-5.1}{\case{$\textit{keys}(D) \subseteq \textit{keys}(D')$ is false}}
 				\begin{proof}
-					\pf~The conjunction will always be false, so the additional partial order induced by \stepref{label-4} is irrelevant and the partial order is only defined by $\textit{keys}(D) \subseteq \textit{keys}(D')$. Note that the right-hand side must also be ignored because Assumption~\ref{subset} is not satisfied and the result is therefore not defined.
+					The conjunction will always be false, so the additional partial order induced by \stepref{label-4} is irrelevant. Therefore, the partial order is only defined by $\textit{keys}(D) \subseteq \textit{keys}(D')$. Note that the right-hand side must be ignored because Assumption~\ref{subset} is not satisfied and the result is therefore not defined.
 				\end{proof}
 				
 				\qedstep
 				\begin{proof}
-					\pf~All possible cases of the conjunction define partial orders, so the conjunction of $\textit{keys}(D) \subseteq \textit{keys}(D')$ and \stepref{label-4} is a partial order.
+					All possible cases of the conjunction define partial orders, so the conjunction of $\textit{keys}(D) \subseteq \textit{keys}(D')$ and \stepref{label-4} is a partial order.
 				\end{proof}
 			\end{proof}
 			
 			\qedstep
 			\begin{proof}
-				\pf~\texttt{compare} is a partial order over $\mathds{S}$ because \stepref{label-5}. A semi-lattice is the combination of possible states and a partial order, therefore both conditions are sufficient to define $\mathds{L}$.
+				\texttt{compare} is a partial order over $\mathds{S}$ because its definition is completely covered by \stepref{label-5}. A semi-lattice is the combination of possible states and a partial order, therefore both conditions are sufficient to define $\mathds{L}$.
 			\end{proof}			
 	\end{proof}
 
@@ -513,6 +489,7 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 		\pfsketch~ \texttt{Merge} is the conjunction of performing the union on keys and maximum values on counters, which both compute the least upper bound, respectively on keys and values. In conditions when the maximum value cannot be computed, the corresponding part of the state is equal to one of the state input, \textit{e.g.} $D$, and the relationship to the other state input, \textit{e.g.} $D'$, can safely be ignored.
 		\step{label-1}{
 		\assume{\begin{pfenum}
+			\item $\mathcal{P}(E)$ is the power set of elements in $E$.
 			\item $S \in \mathcal{P}(E)$ and $S' \in \mathcal{P}(E)$.
 			\item $\subseteq$ is a partial order on $\mathcal{P}(E)$ forming a semi-lattice $\mathds{L}_{\mathcal{P}(E)}$.
 		\end{pfenum}}
@@ -520,22 +497,22 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 		\begin{proof}
 			\step{label-1.1}{$S \subseteq S''$}
 			\begin{proof}
-				\pf~ Because $S \subseteq (S \cup S') = S''$ (by cases on $S \subset S', S=S', S \supset S'$).
+				Because $S \subseteq (S \cup S') = S''$ (by cases on $S \subset S', S=S', S \supset S'$).
 			\end{proof}
 			
 			\step{label-1.2}{$S' \subseteq S''$}
 			\begin{proof}
-				\pf~ Because $S' \subseteq (S \cup S') = S''$ (by cases on $S \subset S', S=S', S \supset S'$).
+				Because $S' \subseteq (S \cup S') = S''$ (by cases on $S \subset S', S=S', S \supset S'$).
 			\end{proof}
 			
 			\step{label-1.3}{$\nexists S''' \in \mathcal{P}(E)$ such that $S''' \subset S'' \wedge S \subseteq S''' \wedge S' \subseteq S''' $}
 			\begin{proof}
-				\pf~ By contradiction: Let's assume a contrario that there exists such a $S'''$. There must exist $e \in S''$ such that $e \notin S'''$ because $S''' \subset S''$ and therefore smaller. Since $S'' = S \cup S'$, either $e \in S$, $e \in S'$ or both. In that case, it is not possible for $S'''$ to be a superset of both $S$ and $S'$ since it is missing $e$. $S''$ must therefore be the smallest superset of both $S$ and $S'$ in $\mathds{L}_S$.
+				By contradiction: Let's assume a contrario that there exists such a $S'''$. There must exist $e \in S''$ such that $e \notin S'''$ because $S''' \subset S''$ and therefore smaller. Since $S'' = S \cup S'$, either $e \in S$, $e \in S'$ or both. In that case, it is not possible for $S'''$ to be a superset of both $S$ and $S'$ since it is missing $e$. $S''$ must therefore be the smallest superset of both $S$ and $S'$ in $\mathds{L}_{\mathcal{P}(E)}$.
 			\end{proof}
 
 			\qedstep
 			\begin{proof}
-				The conjunction of \stepref{label-1.1}, \stepref{label-1.2}, and \stepref{label-1.3} is the definition of a least upper bound, therefore $S''$ is the least upper bound of $S$ and $S'$.	
+				The conjunction of \stepref{label-1.1}, \stepref{label-1.2}, and \stepref{label-1.3} is the definition of a least upper bound.	
 			\end{proof}
 		\end{proof}
 		
@@ -548,112 +525,117 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 \begin{proof}
 			\step{label-2.1}{$x \leq x''$}
 			\begin{proof}
-				\pf~ Because $x \leq \textit{max}(x,x') = x''$ (by cases on $x<x', x=x', x>x'$).
+				Because $x \leq \textit{max}(x,x') = x''$ (by cases on $x<x', x=x', x>x'$).
 			\end{proof}
 			
 			\step{label-2.2}{$x' \leq  x''$}
 			\begin{proof}
-				\pf~ Because $x' \leq \textit{max}(x,x') = x''$ (by cases on $x<x', x=x', x>x'$).
+				Because $x' \leq \textit{max}(x,x') = x''$ (by cases on $x<x', x=x', x>x'$).
 			\end{proof}
 			
 			\step{label-2.3}{$\nexists x''' \in \mathds{N}$ such that $x''' < x'' \wedge x \leq x''' \wedge x' \leq x''' $}
 			\begin{proof}
-				\pf~ By contradiction: Let's assume a contrario that there exists such a $x'''$. Because $x''' < x''$, $x'''$ must be smaller than $x$, $x'$ or both because $x'' = \textit{max}(x,x')$. However, this contradicts $ x \leq x'''$,  $x' \leq x'''$ or both. Therefore, $x''$ must be the smallest $\mathds{N}$ that is also greater than both $x$ and $x'$ in $\mathds{L}_\mathds{N}$.
+				By contradiction: Let's assume a contrario that there exists such a $x'''$. Because $x''' < x''$, $x'''$ must be smaller than $x$, $x'$, or both because $x'' = \textit{max}(x,x')$. However, this contradicts $ x \leq x'''$,  $x' \leq x'''$ or both. Therefore, $x''$ must be the smallest $\mathds{N}$ that is also greater than both $x$ and $x'$ in $\mathds{L}_\mathds{N}$.
 			\end{proof}
 
 			\qedstep
 			\begin{proof}
-				The conjunction of \stepref{label-2.1}, \stepref{label-2.2}, and \stepref{label-2.3} is the definition of a least upper bound, therefore $x''$ is the least upper bound of $x$ and $x'$ in $\mathds{L}_\mathds{N}$.	
+				The conjunction of \stepref{label-2.1}, \stepref{label-2.2}, and \stepref{label-2.3} is the definition of a least upper bound.	
 			\end{proof}
 		\end{proof}
 		
 		
 		\step{label-3}{
-		\prove{$\textit{keys}(D'')$ is the least upper bound of $\textit{keys}(D)$ and $\textit{keys}(D')$.}}
+		$\textit{keys}(D'')$ is the least upper bound of $\textit{keys}(D)$ and $\textit{keys}(D')$.}
 		\begin{proof}
-			\pf~ $D, D', D''$ are sets, $\textit{keys}(D'') = \textit{keys}(D) \cup \textit{keys}(D')$, and \stepref{label-1}, together imply that $\textit{keys}(D'')$ is the least upper bound of $\textit{keys}(D)$ and $\textit{keys}(D')$ in $\mathds{L}_{\mathcal{P}(E)}$.
+			$\textit{keys}(D), \textit{keys}(D'), \textit{keys}(D'')$ are sets; $\textit{keys}(D'') = \textit{keys}(D) \cup \textit{keys}(D')$, and \stepref{label-1}, together imply that $\textit{keys}(D'')$ is the least upper bound of $\textit{keys}(D)$ and $\textit{keys}(D')$ in $\mathds{L}_{\mathcal{P}(E)}$.
 		\end{proof}
 		
 		\step{label-3}{
-		\prove{For every $e \in \textit{keys}(D'')$ such that $e \in \textit{keys}(D) \wedge e \in \textit{keys}(D')$, $D''[e]$ is the least upper bound of $D[e]$ and $D'[e]$.}}
+		For every $e \in \textit{keys}(D'')$ such that $e \in \textit{keys}(D) \wedge e \in \textit{keys}(D')$, $D''[e]$ is the least upper bound of $D[e]$ and $D'[e]$.}
 		\begin{proof}
-			\pf~$D[e], D'[e], D''[e]$ are natural numbers, $D''[e] = \textit{max}(D[e], D'[e])$, and \stepref{label-2} together imply that $D''[e]$ is the least upper bound of $D[e]$ and $D'[e]$.
+			$D[e], D'[e], D''[e]$ are natural numbers, $D''[e] = \textit{max}(D[e], D'[e])$, and \stepref{label-2}.
 		\end{proof}
 		
 		\step{label-4}{
-		\prove{\texttt{compare}$(D,D'')$ is true ($D \leq D''$, according to $\mathds{L}$) }}
+		\texttt{compare}$(D,D'')$ is true ($D \leq D''$, according to $\mathds{L}$) }
 		\begin{proof}
 			\step{label-4.1}{$\textit{keys}(D) \subseteq \textit{keys}(D'')$}
 			\begin{proof}
-				\pf~ $K'' = \textit{keys}(D'') = (\textit{keys}(D) \cup \textit{keys}(D')) \supseteq \textit{keys}(D)$
+				$K'' = \textit{keys}(D'') = (\textit{keys}(D) \cup \textit{keys}(D')) \supseteq \textit{keys}(D)$
 			\end{proof}
 		
 			\step{label-4.2}{$\forall e \in \textit{keys}(D) : D[e] \leq D''[e]$}
 			\begin{proof}
 				\step{label-4.2.1}{$\forall e \in \textit{keys}(D) : e \in \textit{keys}(D'')$}
 				\begin{proof}
-					\pf~ Because \stepref{label-4.1}, precondition for the cases below.
+					Because \stepref{label-4.1}. Necessary condition for following cases.
 				\end{proof}
 				
-				\case{$D''[e] = \textit{max}(D[e], D'[e])$}
+				\step{}{\case{$D''[e] = \textit{max}(D[e], D'[e])$}}
 				\begin{proof}
-					\pf~  $\textit{max}(D[e], D'[e]) \geq D[e]$ therefore $D[e] \leq D''[e]$.
+					$\textit{max}(D[e], D'[e]) \geq D[e]$ implies $D[e] \leq D''[e]$.
 				\end{proof}
 				
-				\case{$D''[e] = D[e]$}
+				\step{}{\case{$D''[e] = D[e]$}}
 				\begin{proof}
-					\pf~  Trivially: $D''[e] = D[e]$ implies $D[e] \leq D''[e]$.
-				\end{proof}
-				
-				\qedstep
-				\begin{proof}
-				 	Note that $D''[e] = D'[e]$, which happens when $e \in \textit{keys}(D'') \wedge e \in \textit{keys}(D') \wedge e \notin \textit{keys}(D)$ does not matter for \texttt{compare}$(D, D'')$ because in that case $D[e] \leq D''[e]$ is only tested for $e \in \textit{keys}(D)$ and therefore does not arise.
-				\end{proof}
-			\end{proof}
-		\end{proof}
-		
-		\step{label-5}{
-		\prove{\texttt{compare}$(D',D'')$ is true ($D' \leq D''$, according to $\mathds{L}$) }}
-		\begin{proof}
-			\pf~ Same argument as \stepref{label-4} but on $D'$ instead of $D$.
-		\end{proof}
-		
-		\step{label-6}{
-		\prove{$\nexists D''' \in \mathds{S}$ such that $D \leq D''' \wedge D' \leq D''' \wedge D''' < D''$ in $\mathds{L}$.}}
-		\begin{proof}
-			\step{label-6.1}{$\nexists \textit{keys}(D''')$ such that $\textit{keys}(D''') \subset \textit{keys}(D'') \wedge \textit{keys}(D) \subseteq \textit{keys}(D''') \wedge \textit{keys}(D') \subseteq \textit{keys}(D''') $.}
-			\begin{proof}
-				\pf~ $\textit{keys}(D'') = \textit{keys}(D) \cup \textit{keys}(D')$ and \stepref{label-1} imply that $\textit{keys}(D'')$ is a least upper bound, which by definition implies there is no $D'''$ satisfying the above conditions.
-			\end{proof}
-			
-			\step{label-6.2}{$\nexists e \in \textit{keys}(D'') \wedge c \in \mathds{N} : c < D''[e] \wedge D[e] \leq c \wedge D'[e] \leq c$}
-			\begin{proof}
-				\pfsketch~ There are three possible cases for $e \in \textit{keys}(D'')$ and none allow $c \in \mathds{N}$ with the required conditions.
-				\case{$e \in \textit{keys}(D) \wedge e \in \textit{keys}(D')$}
-				\begin{proof}
-					\pf~ $D''[e] = \textit{max}(D[e], D'[e])$, by \stepref{label-2} implies $D''[e]$ is a least upper bound, which by definition implies that such a $c$ does not exists.
-				\end{proof}
-				
-				\case{$e \notin \textit{keys}(D) \wedge e \in \textit{keys}(D')$}
-				\begin{proof}
-					\pf~ $D''[e] = D'[e]$ therefore a $c \in \mathds{N}$ cannot be both smaller than $D'']e]$ and larger than $D'[e]$. Because those two conditions can never be true, $D[e] \leq c$, that is undefined, can be ignored.
-				\end{proof}
-				
-				\case{$e \in \textit{keys}(D) \wedge e \notin \textit{keys}(D')$}
-				\begin{proof}
-					\pf~ $D''[e] = D[e]$ therefore a $c \in \mathds{N}$ cannot be both smaller than $D'']e]$ and larger than $D[e]$. Because those two conditions can never be true,  $D'[e] \leq c$, that is undefined, can be ignored.
-
+					Trivially: $D''[e] = D[e]$ implies $D[e] \leq D''[e]$.
 				\end{proof}
 				
 				\qedstep
 				\begin{proof}
-					\pf~ Since the conditions are true for all cases, \stepref{label-6.2} is true.
+				 	Note that $D''[e] = D'[e]$, which happens when $e \in \textit{keys}(D'') \wedge e \in \textit{keys}(D') \wedge e \notin \textit{keys}(D)$ does not matter for \texttt{compare}$(D, D'')$ because $D[e] \leq D''[e]$ is only tested for $e \in \textit{keys}(D)$.
 				\end{proof}
 			\end{proof}
 			
 			\qedstep
 			\begin{proof}
-				\pf~ Because \texttt{compare} is the conjonction of conditions on keys and counters, respectively covered by \stepref{label-6.1} and \stepref{label-6.2} there cannot be such a $D'''$. Therefore $D''$ is the least upper bound of $D$ and $D'$ in $\mathds{L}$.
+				By the conjunction of \stepref{label-4.1} and \stepref{label-4.2}.
+			\end{proof}
+		\end{proof}
+		
+		\step{label-5}{
+		\texttt{compare}$(D',D'')$ is true ($D' \leq D''$, according to $\mathds{L}$) }
+		\begin{proof}
+			Same argument as \stepref{label-4} but on $D'$ instead of $D$.
+		\end{proof}
+		
+		\step{label-6}{
+		$\nexists D''' \in \mathds{S}$ such that $D''' < D'' \wedge D \leq D''' \wedge D' \leq D'''$ in $\mathds{L}$.}
+		\begin{proof}
+			\step{label-6.1}{$\nexists \textit{keys}(D''')$ such that $\textit{keys}(D''') \subset \textit{keys}(D'') \wedge \textit{keys}(D) \subseteq \textit{keys}(D''') \wedge \textit{keys}(D') \subseteq \textit{keys}(D''') $.}
+			\begin{proof}
+				$\textit{keys}(D'') = \textit{keys}(D) \cup \textit{keys}(D')$ and \stepref{label-1} imply that $\textit{keys}(D'')$ is a least upper bound, which by definition implies there is no $D'''$ satisfying the above conditions.
+			\end{proof}
+			
+			\step{label-6.2}{$\nexists e \in \textit{keys}(D'') \wedge c \in \mathds{N} : c < D''[e] \wedge D[e] \leq c \wedge D'[e] \leq c$}
+			\begin{proof}
+				\pfsketch~ There are three possible cases for $e \in \textit{keys}(D'')$ and none allow $c \in \mathds{N}$ with the required conditions.
+				\step{}{\case{$e \in \textit{keys}(D) \wedge e \in \textit{keys}(D')$}}
+				\begin{proof}
+					$D''[e] = \textit{max}(D[e], D'[e])$, by \stepref{label-2} implies $D''[e]$ is a least upper bound, which by definition implies that such a $c$ does not exists.
+				\end{proof}
+				
+				\step{}{\case{$e \notin \textit{keys}(D) \wedge e \in \textit{keys}(D')$}}
+				\begin{proof}
+					$D''[e] = D'[e]$ therefore a $c \in \mathds{N}$ cannot be both smaller than $D'']e]$ and larger than $D'[e]$. Therefore, $D[e] \leq c$ (which is undefined) can be safely ignored because $c < D''[e] \wedge D'[e] \leq c$ is always false.
+				\end{proof}
+				
+				\step{}{\case{$e \in \textit{keys}(D) \wedge e \notin \textit{keys}(D')$}}
+				\begin{proof}
+					$D''[e] = D[e]$ therefore a $c \in \mathds{N}$ cannot be both smaller than $D'']e]$ and larger than $D[e]$. Therefore,  $D'[e] \leq c$ (which is undefined) can be safely ignored because $c < D''[e] \wedge D[e] \leq c$ is always false.
+
+				\end{proof}
+				
+				\qedstep
+				\begin{proof}
+					The case $e \notin \textit{keys}(D) \wedge e \notin \textit{keys}(D')$ contradicts $e \in \textit{keys}(D'')$ since $\textit{keys}(D'') = \textit{keys}(D) \cup \textit{keys}(D')$. Since $\nexists$ is a negation and the following conditions in \stepref{label-6.2} are always false for all cases, \stepref{label-6.2} is always true.
+				\end{proof}
+			\end{proof}
+			
+			\qedstep
+			\begin{proof}
+				Because \texttt{compare} is the conjonction of conditions on keys and counters, respectively covered by \stepref{label-6.1} and \stepref{label-6.2} there cannot be such a $D'''$. Therefore $D''$ is the least upper bound of $D$ and $D'$ in $\mathds{L}$.
 			\end{proof}
 		\end{proof}
 		
@@ -684,63 +666,77 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 		\item $D$ is the current state	
 	\end{pfenum}}	
 	\prove{All operations that may generate a new state, when applied on state $D$ and any possible arguments, result in a new state either equal or larger than $D$ in $\mathds{L}$ according to \texttt{compare}.}
+
+		\pfsketch~ By case, because every operation either does not have an input state as argument, does not generate a new state, or generate a new state that is equal or larger than all state inputs.
+		\step{}{\case{$D = \texttt{Initialize}()$}}
+		\begin{proof}
+			Initializes a new $D$, but not from an existing state, so monotonicity does not apply.
+		\end{proof}
+		
+		\step{}{\case{$S = \texttt{Query}(D)$}}
+		\begin{proof}
+			\texttt{query} does not generate a new state.
+		\end{proof}
+		
+		\step{}{\case{$D' = \texttt{Add}(D,e) \geq D$}}
+		\begin{proof}
+			\step{}{\case{$e \notin \textit{keys}(D)$}}
+			\begin{proof}
+				The key $e$ is added to $D$ with counter $c=1$, therefore $D' > D$ because $D'$ keys are a superset of $D$'s keys.
+			\end{proof}
+			
+			\step{}{\case{$e \in \textit{keys}(D) \wedge D[e]$ is even}}
+			\begin{proof}
+				The counter $D[e]$ is increased by 1, therefore $D' > D$.
+			\end{proof}
+			
+			\step{}{\case{$e \in \textit{keys}(D) \wedge D[e]$ is odd}}
+			\begin{proof}
+				No keys or counters are modified, therefore $D=D'$.
+			\end{proof}
+			
+			\qedstep
+			\begin{proof}
+				Covers all possible cases: $e$ in or not in the keys, and counter $D[e]$ is odd or even if $e$ present.
+			\end{proof}
+		\end{proof}
+		
+		\step{}{\case{$D' = \texttt{Remove}(D,e) \geq D$}}
+		\begin{proof}
+			\step{}{\case{$e \notin \textit{keys}(D)$}}
+			\begin{proof}
+				No keys or counters are modified, therefore $D=D'$.
+			\end{proof}
+			
+			\step{}{\case{$e \in \textit{keys}(D) \wedge D[e]$ is odd}}
+			\begin{proof}
+				The counter $D[e]$ is increased by 1, therefore $D' > D$.
+			\end{proof}
+			
+			\step{}{\case{$e \in \textit{keys}(D) \wedge D[e]$ is even}}
+			\begin{proof}
+				No keys or counters are modified, therefore $D=D'$.
+			\end{proof}
+			
+			\qedstep
+			\begin{proof}
+				Covers all possible cases: $e$ in or not in the keys, and counter $D[e]$ is odd or even if $e$ present.
+			\end{proof}
+		\end{proof}
+		
+		\step{}{\case{$b = \texttt{Compare}(D,D')$}}
+		\begin{proof}
+			\texttt{compare} does not generate a new state.
+		\end{proof}
+		
+		\step{}{\case{$D'' = \texttt{Merge}(D,D') : D'' \geq D \wedge D'' \geq D'$}}
+		\begin{proof}
+			By definition, because \texttt{merge} computes the least upper bound (Appendix~\ref{sec:longer-proofs:lub}).
+		\end{proof}
+	
+	\qedstep
 	\begin{proof}
-		\pfsketch~ Every operation either does not have an input state as argument, does not generate a new state, or generate a new state that is equal or larger than all state inputs.
-		\case{$D = \texttt{Initialize}()$}
-		\begin{proof}
-			\pf~ Initializes a new $D$, but not from an existing state, so monotonicity does not apply.
-		\end{proof}
-		
-		\case{$S = \texttt{Query}(D)$}
-		\begin{proof}
-			\pf~ \texttt{query} does not generate a new state.
-		\end{proof}
-		
-		\case{$D' = \texttt{Add}(D,e) \geq D$}
-		\begin{proof}
-			\case{$e \notin \textit{keys}(D)$}
-			\begin{proof}
-				\pf~ The key $e$ is added to $D$ with counter $c=1$, therefore $D' \geq D$ because $D'$ keys are a superset of $D$'s keys.
-			\end{proof}
-			
-			\case{$e \in \textit{keys}(D) \wedge D[e]$ is even}
-			\begin{proof}
-				\pf~ The counter $D[e]$ is increased by 1, therefore $D' \geq D$.
-			\end{proof}
-			
-			\case{$e \in \textit{keys}(D) \wedge D[e]$ is odd}
-			\begin{proof}
-				\pf~ No key or counter are modified, therefore $D=D'$.
-			\end{proof}
-		\end{proof}
-		
-		\case{$D' = \texttt{Remove}(D,e) \geq D$}
-		\begin{proof}
-			\case{$e \notin \textit{keys}(D)$}
-			\begin{proof}
-				\pf~ No key or counter are modified, therefore $D=D'$.
-			\end{proof}
-			
-			\case{$e \in \textit{keys}(D) \wedge D[e]$ is odd}
-			\begin{proof}
-				\pf~ The counter $D[e]$ is increased by 1, therefore $D' \geq D$.
-			\end{proof}
-			
-			\case{$e \in \textit{keys}(D) \wedge D[e]$ is even}
-			\begin{proof}
-				\pf~ No key or counter are modified, therefore $D=D'$.
-			\end{proof}
-		\end{proof}
-		
-		\case{$b = \texttt{Compare}(D,D')$}
-		\begin{proof}
-			\pf~ \texttt{compare} does not generate a new state.
-		\end{proof}
-		
-		\case{$D'' = \texttt{Merge}(D,D') : D'' \geq D \wedge D'' \geq D'$}
-		\begin{proof}
-			\pf~ By definition, because \texttt{merge} computes the least upper bound (Appendix~\ref{sec:longer-proofs:lub}).
-		\end{proof}
+		All functions of Algorithm~\ref{alg:inf-p-set} have been covered.
 	\end{proof}	
 \end{proof}
 
