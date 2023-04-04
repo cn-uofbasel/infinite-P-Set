@@ -29,7 +29,7 @@
 \begin{abstract}
 The 2P-Set Conflict-Free Replicated Data Type (CRDT) supports two phases for each possible element: in the first phase an element can be added to the set and the subsequent additions are ignored; in the second phase an element can be removed after which it will stay removed forever regardless of subsequent additions and removals. We generalize the 2P-Set to support an infinite sequence of alternating additions and removals of the same element. In the presence of concurrent additions and removals on different replicas, all replicas will eventually converge to the longest sequence of alternating additions and removals that follows causal history across replicas. 
 
-The idea of converging on the longest-causal sequence of opposite operations had already been suggested in the context of an undo-redo framework but the design was neither given a name nor fully developed. In this paper, we present the full design directly, using nothing more than the basic formulation of state-based CRDTs. We also show the connection between the set-based definition of 2P-Set and the counter-based definition of the $\infty$P-Set with simple reasoning. We then give detailed proofs of convergence using the structured proof approach advocated by Lamport. This paper should be useful as a pedagogical example for designing state-based CRDT, and hopefully raise the profile of CRDTs based on \textit{longest sequence wins}.
+The idea of converging on the longest-causal sequence of opposite operations had already been suggested in the context of an undo-redo framework but the design was neither given a name nor fully developed. In this paper, we present the full design directly, using nothing more than the basic formulation of state-based CRDTs. We also show the connection between the set-based definition of 2P-Set and the counter-based definition of the $\infty$P-Set with simple reasoning. We then give detailed proofs of convergence. The underlying \textit{grow-only dictionary of grow-only counters} on which the $\infty$P-Set is built may be used to build other state-based CRDTs. In addition, this paper should be useful as a pedagogical example for designing state-based CRDTs, and might help raise the profile of CRDTs based on \textit{longest sequence wins}.
 \end{abstract}
 
 \section{Introduction}
@@ -46,17 +46,17 @@ The Last-Writer-Wins-Set (LWW-Set)~\cite{shapiro:inria-00555588} also enables ad
 
 The T-Set~\cite{Dolan2020undoable} also enables addition of an element after removal and represents whether an element is in a set or not by associating it with 0 or 1 with modifications performed as modulo 2 operations. However, its operation-based formulation relies on causal delivery to determine which operation happened last. A similar state-based design, based on the mapping of the state of elements in the set to integers, had previously been  suggested in the context of a framework for undo-redo operations on state-based CRDTs~\cite{Yu2019undo}. However, the complete design had not been presented and no name had been given to it.
 
-In this paper, we present the complete design of a state-based set design that supports an infinite sequence of additions and removals, which we call the $\infty$P-Set due to its straight-forward extension of the 2P-Set semantics. An $\infty$P-Set represents whether an element is in a set as positive integers. 
+In this paper, we present the complete design of a state-based set design that supports an infinite sequence of additions and removals, which we call the $\infty$P-Set due to its straight-forward extension of the 2P-Set semantics. An $\infty$P-Set represents whether an element is in a set as positive integers within a \textit{grow-only dictionary of grow-only counters}: if the associated counter is odd the element is in the set, otherwise if no counter is present or the counter is even, the element is not in the set.
 
 Similar to the T-Set~\cite{Dolan2020undoable} and unnamed predecessor~(\cite{Yu2019undo}, Section 5.1), our design derives from the following two observations. First, given operations \textit{add(e)} and \textit{remove(e)} on a set $S$ implemented as a CRDT, the implementation of $S$ has only two possible states: one in which an element $e$ is in the set $S$ ($e \in S$) and one in which an element $e$ is not in the set $S$ ($e \notin S$). When $e \in S$, only a \textit{remove(e)} modifies the state, and when $e \notin S$, only an \textit{add(e)} modifies the state. When only observing state changes, any arbitrary sequence of \textit{add(e)} and \textit{remove(e)} is actually equivalent to a strict alternating sequence of \textit{add(e)} and \textit{remove(e)}. Second, two replicas performing the same sequence of \textit{add(e)} and \textit{remove(e)} will reach the same state, even without communication. When two replicas have sequences of different lengths, we can see the smaller as a prefix of the longer and ignore the smaller, therefore \textit{the longest sequence eventually wins} and all replicas converge to the final state of the longest sequence. Note that the longest sequence need not happen on a single replica, it may actually have been generated through a sequence of replicas according to the causal history. Note also that the longest sequence will be given priority even if a concurrent but more recent shorter sequence exists, \textit{e.g.}, according to a global timestamp.  
 
 In the rest of this paper\footnote{Sources for this paper are also available here: \url{https://github.com/cn-uofbasel/infinite-P-Set}. Pull-requests to suggest corrections are welcome.}, we make the following contributions:
 \begin{itemize}
-	\item We present the complete design of an $\infty$P-Set, including how the design follows from a straight-forward extension of a 2P-Set. We rely on nothing more than the base formalism of state-based CRDTs (Section~\ref{sec:specification});
-	\item We provide a proof that $\infty$P-Set is indeed a state-based CRDT, with a high-level overview in Section~\ref{sec:proofs:convergence} and a detailed presentation in Appendix~\ref{sec:longer-proofs:convergence}. The proofs should be accessible to non-mathematicians with no more background than discrete mathematics and are written in the structured style advocated by Lamport (CITE), making them useful as pedagogical example for undergrad students and practioners;
+	\item We present the complete design of an $\infty$P-Set. In contrast to the aforementioned undo-redo framework~\cite{Yu2019undo} which introduces its own formalism, we rely on nothing more than the base formalism of state-based CRDTs (Section~\ref{sec:specification}). Our explanation of the connection between the 2P-Set and the $\infty$P-Set is also simpler than that the presentation of the T-Set~\cite{Dolan2020undoable}: the latter relies on group theory which most undergrad computer science and practitioners are unlikely to have been exposed to;
+	\item We provide a proof that $\infty$P-Set is indeed a state-based CRDT, with a high-level overview in Section~\ref{sec:proofs:convergence} and a detailed presentation in Appendix~\ref{sec:longer-proofs:convergence}. The underlying \textit{grow-only dictionary of grow-only counters} may also be useful for building more sophisticated state-based CRDTs. The proofs are written in the structured style advocated by Lamport~\cite{lamport2012write} and only assume background on discrete mathematics, making them useful as pedagogical example for undergrad students and practioners;
 \end{itemize}
 
-In addition, we also discuss its lower memory consumption compared to an OR-Set or LWW-Set (Section~\ref{sec:resource-consumption}). We then conclude with a summary and some directions for future work (Section~\ref{sec:conclusion}).
+In addition, we also discuss the lower memory consumption of an $\infty$P-Set compared to an OR-Set or LWW-Set (Section~\ref{sec:resource-consumption}). We then conclude with a summary and some directions for future work (Section~\ref{sec:conclusion}).
 
 \section{$\infty$P-Set}
 \label{sec:specification}
@@ -68,9 +68,9 @@ In this section, we first present how the design is an extension of a 2P-Set (Se
 \subsection{From 2P-Set to $\infty$P-Set}
 \label{sec:intuition}
 
-Our design is a generalization of the behaviour of the 2P-Set, which we show in progressive steps. 
+Our design is a generalization of the behaviour of the 2P-Set~\cite{shapiro:inria-00555588}, which we show in progressive steps. 
 
-In a 2P-Set, an element $e$ can either be \textit{in} a set $S$ ($e \in S$) or \textit{out} of the same set ($e \notin S$). An element is initially out of the set. After an addition (\textit{add(e)}), the element is in the set, which corresponds to the first phase. Any subsequent addition of $e$ does not change the state of $S$. After a removal (\textit{remove(e)}), $e$ is then considered out of the set forever, which corresponds to the second phase.
+In a 2P-Set, an element $e$ can either be \textit{in} a set $S$ ($e \in S$) or \textit{out} of the same set ($e \notin S$). An element is initially out of the set. After an addition \textit{add(e)}, the element is in the set, which corresponds to the first phase. Any subsequent addition of $e$ does not change the state of $S$. After a removal \textit{remove(e)}, $e$ is then considered out of the set forever, which corresponds to the second phase.
 
 A 2P-Set is implemented by combining 2 \textit{grow-only sets} $A$ and $R$. $A$ tracks additions, and is accordingly called the \textit{add-set}; $R$ tracks removals, and is accordingly called the \textit{remove-set} (or \textit{tombstones} set). The \textit{add(e)} operation adds $e$ to the add-set $A$. The \textit{remove(e)} operation adds $e$ to the remove-set $R$, only if $e$ is already in the add-set $A$. The element $e$ is considered in $S$ if and only if $e$ is in the difference of $A$ and $R$, \textit{i.e.} $e \in S \Leftrightarrow e \in (A\backslash R)$. Merging two states $S_1 = (A_1, R_1)$ and $S_2 = (A_2, R_2)$ is simply the union of their components, \textit{i.e.} $(A_1 \cup A_2, R_1 \cup R_2)$.
 
@@ -83,7 +83,7 @@ $e$ is included in: if $e$ is in all add-sets up to $A_i$ and all remove-sets up
 \label{sec:data-type}
 
 The behaviour of the $\infty$P-Set is listed in Algorithm~\ref{alg:inf-p-set} following existing conventions~\cite{shapiro:inria-00555588}.  The state of the CRDT is implemented as a dictionary $D$ that 
-maps unique elements to a single integer. The corresponding set $S$ is obtained by querying the dictionary, \textit{i.e.} $S=\texttt{query}(D)$. The same set $S$ might be implemented by different valid dictionaries so the inverse relationship is ambiguous. Nonetheless, to simplify our exposition we sometimes reason about the state of $S$ then mention the corresponding dictionary $D$. In that case, keep in mind however that only $D$ is updated by operations while $S$ is a \textit{view} on $D$. Moreover, all operations are specified in a functional style, with the first argument being the current state $D$ and the return value being the modified state $D'$ or $D''$. This makes the algorithm easier to associate with the proofs (Section~\ref{sec:proofs}). A practical implementation might instead encapsulate the state, in an object for example.
+maps unique elements to a single positive integer. The corresponding set $S$ is obtained by querying the dictionary, \textit{i.e.} $S=\texttt{query}(D)$. The same set $S$ might be implemented by different valid dictionaries so the inverse relationship is ambiguous. Nonetheless, to simplify our exposition we sometimes reason about the state of $S$ then mention the corresponding dictionary $D$. In that case, keep in mind however that only $D$ is updated by operations while $S$ is a \textit{view} on $D$. Moreover, all operations are specified in a functional style, with the first argument being the current state $D$ and the return value being the modified state $D'$ or $D''$. This makes the algorithm easier to associate with the proofs (Section~\ref{sec:proofs}). A practical implementation might instead encapsulate the state, in an object for example.
 
 Operations are the followings:
 \begin{itemize}
@@ -98,7 +98,7 @@ Operations are the followings:
 
 \item $b=\texttt{Compare}(D, D')$ returns $b=\texttt{true}$ if $D'$ includes all operations that were performed on $D$ and possibly more. Otherwise, it returns $b=\texttt{false}$. The comparison is true if and only if the keys of $D$ are a subset of those of $D'$ and all the counters associated to every element of $D$ are smaller or equal than corresponding counters in $D'$. If $\texttt{compare}(D,D')= \texttt{compare}(D',D)$ there are two possibilities: if both are \texttt{true} then both dictionaries are actually equal and have received the same sequences of operations; otherwise, the ordering is not defined which means that $D$ and $D'$ have been modified concurrently but not merged yet.
 
-\item $D''=\texttt{Merge}(D, D')$ combines $D$ and $D'$ such that $D''$ will be greater than both but as small as possible, effectively incorporating all operations that happened to both $D$ and $D'$. If an element $e$ is  in $D'$ but not in $D$, $e$ is added with the associated counter from $D'$. Otherwise, the counter of $e$ is chosen as the maximum value of the corresponding counters in both $D$ and $D'$, which corresponds to the longest sequence of alternating \textit{add(e)} and \textit{remove(e)} applied on either $D$ or $D'$.
+\item $D''=\texttt{Merge}(D, D')$ combines $D$ and $D'$ such that $D''$ will be greater than both but as small as possible, effectively incorporating all operations that happened to both $D$ and $D'$. If an element $e$ is  in $D'$ but not in $D$, $e$ is added with the associated counter from $D'$, and inversely. Otherwise, the counter of $e$ is chosen as the maximum value of the corresponding counters in both $D$ and $D'$, which corresponds to the longest sequence of alternating \textit{add(e)} and \textit{remove(e)} applied on either $D$ or $D'$.
 \end{itemize}
 
 \begin{algorithm}
@@ -168,7 +168,7 @@ The full behaviour of an $\infty$P-Set implies the followings, starting from an 
 	    \end{enumerate}
 \end{enumerate}
 
-If replicas $r$ and $r'$ are in different states, there still exists a common state $S$ they both were in in the past (the initial state if nothing else), and from that point, the longest alternating sequence $S \rightarrow \textit{add(e)} \rightarrow \textit{remove(e)}\rightarrow \textit{add}(e) \rightarrow \dots$ across replicas determines the final state.
+If replicas $r$ and $r'$ are in different states, there still exists a common state $D$ they both were in in the past (the initial state if nothing else), and from that point, the longest alternating sequence $D \rightarrow \textit{add(e)} \rightarrow \textit{remove(e)}\rightarrow \textit{add}(e) \rightarrow \dots$ across replicas determines the final state.
 
 \subsection{System Model}
 \label{sec:system-model}
@@ -185,15 +185,15 @@ Note that Algorithm~\ref{alg:inf-p-set} does not tolerate arbitrary faults: a ma
 
 To establish convergence, we need to show that a state-based CRDT definition is a \textit{monotonic semi-lattice}~\cite{shapiro:hal-00932836}. A state-based CRDT definition combines the followings:
 \begin{itemize}
-	\item The \textit{set of possible states} $\mathds{S}$: in the case of an $\infty$P-Set, this is the set of all possible dictionaries that associate an element $e$, out of all possible elements $E$ that could be stored, to an integer greater or equal to zero that represents the state of $e$ in the set implemented by the $\infty$P-Set CRDT. The state of a given replica $D$ at any time is always one of those of $\mathds{S}$, \textit{i.e.} $D \in \mathds{S}$;
-	\item A \textit{partial order} $\leq$ with which we can compare two states $D, D' \in S$ such that $D \leq D'$ if and only if the the set of updates that led to $D$ is a subset of the updates that led to $D'$. This is equivalent to say that $D \leq D'$ if and only if $D$ is the same as $D'$ or has happened before $D'$;
-	\item An \textit{initial state} for all replicas $D_0$ such that $D_0 \in S$ onto which all possible sequences of updates are applied: which in the case of a $\infty$P-Set is an empty dictionary and created by \texttt{Initialize};
+	\item The \textit{set of possible states} $\mathds{S}$: in the case of an $\infty$P-Set, this is the set of all possible dictionaries that associate an element $e$, out of all possible elements $E$ that could be stored, to an integer greater than zero that represents the state of $e$ in the set $S = \texttt{query}(D)$. The state of a given replica $D$ at any time is always one of those of $\mathds{S}$, \textit{i.e.} $D \in \mathds{S}$;
+	\item A \textit{partial order} $\leq$ with which we can compare two states $D, D' \in \mathds{S}$ such that $D \leq D'$ if and only if the the set of updates that led to $D$ is a subset of the updates that led to $D'$. This is equivalent to say that $D \leq D'$ if and only if $D$ is the same as $D'$ or has happened before $D'$;
+	\item An \textit{initial state} for all replicas $D_0$ such that $D_0 \in \mathds{S}$ onto which all possible sequences of updates are applied: which in the case of a $\infty$P-Set is an empty dictionary and created by \texttt{Initialize};
 	\item A \textit{set of query operations} $Q$ that do not modify the state: which in the case of an $\infty$P-Set is $\{ \texttt{Query}, \texttt{Compare} \}$;
 	\item A \textit{set of update operations} $U$ that do modify the state (but not necessarily for all combination of state and arguments): which in the case of an $\infty$P-Set is $\{ \texttt{Add}, \texttt{Remove} \}$;
 	\item A \textit{merge} operation $m$ that may potentially modify the state: which in the case of an $\infty$P-Set is ${ \texttt{Merge} }$.
 \end{itemize}
 
-To establish that our state-based CRDT definition is a monotonic semi-lattice, we need to establish three propositions: First, that all possible states are organized in a semi-lattice $\mathds{L}$ ordered by $\leq$. This is a pre-requisite for the next two properties. Second, that merging any two states $D$ and $D'$ computes the \textit{Least Upper Bound} (LUB) of $D$ and $D'$ in $\mathds{L}$. This ensures that the merge is \textit{commutative}, \textit{associative}, and \textit{idempotent}, providing \textit{safety}, \textit{i.e.} that replicas will agree on the final state regardless of ordering, delays, or duplication of merge operations. Third, that all operations modify the state $D$ of a replica such that the new state $D'$ is either equal or larger than the previous state $D$ in $\mathds{L}$ (\textit{monotonicity}). This ensures all state changes will be eventually reflected in the new state of all replicas, either because the same update(s) will have concurrently been applied or because the new state will be the result of a merge. Assuming an underlying communication medium that ensures new states to be eventually delivered to other replicas, the three propositions combined ensure both \textit{liveness} and \textit{safety}: all state changes are going to be replicated on all replicas \textit{and} all replicas will agree on the final state automatically, i.e. \textit{strong eventual consistency}.
+To establish that our state-based CRDT definition is a monotonic semi-lattice, we need to verify three propositions: First, that all possible states are organized in a semi-lattice $\mathds{L}$ ordered by less-or-equal relationship implemented by \texttt{compare}. This is a pre-requisite for the next two properties. Second, that merging any two states $D$ and $D'$ computes the \textit{Least Upper Bound} (LUB) of $D$ and $D'$ in $\mathds{L}$. This ensures that the merge is \textit{commutative}, \textit{associative}, and \textit{idempotent}, providing \textit{safety}, \textit{i.e.} that replicas will agree on the final state regardless of ordering, delays, or duplication of merge operations. Third, that all operations modify the state $D$ of a replica such that the new state $D'$ is either equal or larger than the previous state $D$ in $\mathds{L}$ (\textit{monotonicity}). This ensures all state changes will be eventually reflected in the new state of all replicas, either because the same update(s) will have concurrently been applied or because the new state will be the result of a merge. Assuming an underlying communication medium that ensures new states to be eventually delivered to other replicas, the three propositions combined ensure both \textit{liveness} and \textit{safety}: all state changes are going to be replicated on all replicas \textit{and} all replicas will agree on the final state automatically, i.e. \textit{strong eventual consistency}~\cite{shapiro:hal-00932836}.
 
 
 
@@ -224,14 +224,14 @@ To establish that our state-based CRDT definition is a monotonic semi-lattice, w
 	\end{proof}
 
 	
-	\step{label-monotonicity}{\textit{(Monotonicity)} All operations that result in a new state $D''$, do so such that $D''$ is either equal or larger than state input(s) passed as arguments in $\mathds{L}$, if any.}
+	\step{label-monotonicity}{\textit{(Monotonicity)} All operations that may generate a new state, when applied on state $D$ and any possible arguments, result in a new state either equal or larger than $D$ in $\mathds{L}$ according to \texttt{compare}.}
 	\begin{proof}
 		\pfsketch~ Every operation either does not have an input state as argument, does not generate a new state, or generate a new state that is equal or larger than all state inputs.
 	\end{proof}
 
 	\qedstep
 	\begin{proof}
-		\pf By definition, \stepref{label-ordering}, \stepref{label-lub}, \stepref{label-monotonicity} imply that $\infty$P-Set is a state-based CRDT. See Appendix~\ref{sec:longer-proofs:convergence} for more detailed steps.
+		\pf By definition, \stepref{label-ordering}, \stepref{label-lub}, \stepref{label-monotonicity} imply that $\infty$P-Set is a state-based CRDT. See Appendix~\ref{sec:longer-proofs:convergence} for more detailed proof steps.
 	\end{proof}
 \end{proof}
 
@@ -242,20 +242,20 @@ We show here that anomalies previously identified~\cite{bieniusa:hal-00769554} a
 
 First, the specific execution in which the effect of a \textit{remove} is ignored even if it happened after an \textit{add} from a different replica (Fig. 1(a) in~\cite{bieniusa:hal-00769554}) does not happen with $\infty$P-Set because as mentioned in Section~\ref{sec:causal-concurrent-behaviour}, in the presence of a causal relationship, the remove will apply.
 
-Second,  the $\infty$P-Set does not exhibit the counter-intuitive merging behaviour of C-Sets in which two replicas may both issue a sequence of \textit{add(e)} and \textit{remove(e)} that ends in an \textit{add(e)} while $e$ is not in the set after synchronization (Fig. 1(b) in~\cite{bieniusa:hal-00769554}):
-
-%\begin{theorem}
-Merging any two $\infty$P-Sets with states $D$ and $D'$, whose last operation was an \textit{add(e)} (or \textit{remove(e)}), always results in a state $D''$ such that $e \in \texttt{query}(D'')$ (respectively $e \notin \texttt{query}(D'')$).
-%\end{theorem}
+Second,  the $\infty$P-Set does not exhibit the counter-intuitive merging behaviour of C-Sets~\cite{bieniusa:hal-00769554} in which two replicas may both issue a sequence of \textit{add(e)} and \textit{remove(e)} that ends in an \textit{add(e)} while $e$ is not in the set after synchronization (Fig. 1(b) in~\cite{bieniusa:hal-00769554}):
 
 \begin{proof}
-When observing the corresponding dictionaries $D$, $D'$, and $D''$, with both $D[e]$ and $D'[e]$ are odd because their last operation was an \textit{add(e)}, there are two cases:
-\begin{enumerate}
-    \item $D[e]=D'[e]$ and after a merge $D''[e]=D[e]=D'[e]$;
-    \item $D[e]>D'[e]$ or $D[e]<D[e']$: after a merge $D''[e]=max(D[e], D''[e])$
-\end{enumerate}   
+	\prove{Merging any two $\infty$P-Sets with states $D$ and $D'$, whose last operation was an \textit{add(e)} (respectively \textit{remove(e)}), always results in a state $D''$ such that $e \in \texttt{query}(D'')$ (respectively $e \notin \texttt{query}(D'')$).}
 
-In both cases $D''[e]$ is also odd and $e \in  \texttt{query}(D'')$.  The proof for \textit{remove(e)} being the last operation of both sequences is similar, except that $D[e]$ and $D'[e]$ are even.
+
+	\pf~ When observing the corresponding dictionaries $D$, $D'$, and $D''$ is which both $D[e]$ and $D'[e]$ are odd because their last operation was an \textit{add(e)}, there are two cases:
+	\begin{pfenum}
+    		\item $D[e]=D'[e]$ and after a merge $D''[e]=D[e]=D'[e]$;
+    		\item $D[e]>D'[e]$ or $D[e]<D[e']$: after a merge $D''[e]=max(D[e], D''[e])$
+	\end{pfenum}   
+
+	In both cases $D''[e]$ is also odd and $e \in  \texttt{query}(D'')$.  The proof for \textit{remove(e)} being the last operation of both sequences is similar, except that $D[e]$ and $D'[e]$ are even.
+
 \end{proof}
 
 Third, whenever two replicas $r$ and $r'$ issue the same sequence of \textit{add(e)} and \textit{remove(e)} starting from the same state $D$ (Fig. 1 b and c in~\cite{bieniusa:hal-00769554}), $r$ and $r'$ will both end in the same state $D'$ after synchronization, regardless at which point the synchronization happens and even if no synchronization happens, because the same sequence will result in the same counter for $e$ on all replicas.
@@ -263,7 +263,7 @@ Third, whenever two replicas $r$ and $r'$ issue the same sequence of \textit{add
 \section{Resource Consumption}
 \label{sec:resource-consumption}
 
-The overhead of the $\infty$P-Set is a single integer per element and associated containers. It can be implemented as a set of tuples $(e,c)$ where $e$ is the element and $c$ the associated counter. It can also be implemented as a hash-map: current language implementations usually represent integer literals as tagged pointers allowing counts to reach counts up to 
+The overhead of the $\infty$P-Set is a single integer per element plus the associated containers. It can be implemented as a set of tuples $(e,c)$ where $e$ is the element and $c$ the associated counter. It can also be implemented as a hash-map: current language implementations usually represent integer literals as tagged pointers allowing counts to reach counts up to 
 $\frac{\textit{register size}}{2^\textit{tag bit-length}}$. In practice this reaches over billions on today's architectures which should cover most practical sequences of additions and removals. Up to the limit of literal integer representations, the memory consumption is constant.
 
 In contrast to Observe-Remove Sets (OR-Sets)~\cite{shapiro:inria-00555588}, each add operation does not need to be tracked with a separate unique identifier and stored in a set. The OR-set uses memory proportional to the number of additions that have happened since the last removal, with one unique identifier for each, in addition to the size of the set container for each element that has ever been added in the set $S$.
@@ -289,9 +289,7 @@ In contrast to Last-Writer-Wins Sets (LWW-Sets)~\cite{shapiro:inria-00555588}, n
 \section{Conclusion and Future Work}
 \label{sec:conclusion}
 
-We have presented the state-based $\infty$P-Set CRDT. To the best of our knowledge, this is the first design for a set CRDT that leverages the \textit{longest alternating sequence of adds and removes} property to resolve concurrent modifications. This approach requires only a single extra integer per element to track whether the element was last added or removed, which is less than previously known set designs. We have shown that it converges and that it avoids anomalies that affected some other designs, such as the C-Set. We have also shown that it uses less memory than OR-Sets or LWW-Sets.
-
-We plan to extend the design to arbitrary (Byzantine) failures in the future and apply the design in applications to validate whether the currency semantics can suit both programmers and end users.
+We have presented the state-based $\infty$P-Set CRDT. This approach requires only a single extra integer per element to track whether the element was last added or removed. We have shown that it converges and that it avoids anomalies that affected some other designs, such as the C-Set. We have also shown that it uses less memory than OR-Sets or LWW-Sets. We have also provided proofs that are more accessible than previous papers and established a \textit{grow-only dictionary of grow-only counters} as a basic block for other state-based CRDTs. We plan to extend the design to arbitrary (Byzantine) failures in the future and apply the design in applications to validate whether the semantics of \textit{longest sequence wins} suit both programmers and end users.
 
 \section{Acknowledgements}
 \label{sec:acknowledgements}
@@ -322,6 +320,11 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 		\item \label{dict-state} \textit{(possible states)} The state of an $\infty$P-Set is a set $D$ of tuples $(e,c)$ such that $e \in E$ and counter value $c \in \mathds{N}$ representing a dictionary. The state space of all possible dictionaries, $\mathds{S}$, is the power set of the cartesian product of $E$ and $\mathds{N}$ with the constraint that for every $D \in \mathds{S}$ and among all tuples $(e,c) \in D$, a given element $e$ appears at most once.
 		\item \label{dict-keys} \textit{(keys)} The keys of $D$ is the set of elements in $D$, \textit{i.e.} $keys(D) = \{ e : (e,c) \in D \}$.
 		\item \label{dict-counter} \textit{(counter)} The counter associated to $e$ in $D$, written $D[e]$, is the counter $c$ corresponding to the tuple $(e,c) \in D$, \textit{i.e.} $D[e] = c \Leftrightarrow (e,c) \in D$.
+		\item \label{dict-assignment} \textit{(dictionary assignment)} Assigning a counter value $c$ to a dictionary key $e$, written $D[e] \leftarrow c$, performs one of two actions: 
+		\begin{pfenum}
+			\item If $(e,c) \notin \textit{keys}(D)$, it adds a new tuple $(e,c)$ in $D$, \textit{i.e.} $D=D \cup \{ (e,c) \}$;
+			\item otherwise, it replaces the tuple with the same key $e$ with $(e,c)$, \textit{i.e.} $D=D \backslash \{ (e, c') \} \cup \{ (e, c) \}$.
+		\end{pfenum}
 		\item \textit{(possible keys)} Dictionary keys $\mathds{K} = \{ \textit{keys}(D) : D \in \mathds{S} \}$.
 		\item \textit{(possible counters}) Counter values $\mathds{C} = \{ D[e] :  D \in \mathds{S} \wedge e \in \textit{keys}(D) \}$.
 	\end{pfenum}}
@@ -356,7 +359,7 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 			
 			\step{label-1.2}{Sets are partially ordered by $\subseteq$.}
 			\begin{proof}
-				\pf~ The subset relationship $\subseteq$ is \textit{reflexive}, \textit{antisymmetric}, and \textit{transitive} therefore sets ordered by $\subseteq$ are partially-ordered.
+				\pf~ The subset relationship $\subseteq$ is \textit{reflexive}, \textit{antisymmetric}, and \textit{transitive} therefore sets ordered by $\subseteq$ are partially-ordered (see below for the definitions of each).
 			\end{proof}
 			
 			\qedstep
@@ -472,7 +475,7 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 				\end{pfenum}}
 				\prove{$\bigwedge_{e \in \textit{keys}(D)} D[e] \leq D'[e]$ is a partial order}}
 			\begin{proof}
-				\pf~ Because of Assumption~\ref{subset}, $e \in \textit{keys}(D')$ as well, therefore both $D[e]$ and $D'[e]$ are defined. Because \stepref{label-2}, $\leq$ is a partial order over counters of $D$ and $D'$ for element $e$. Because, \stepref{label-3} the pairwise conjunction of partial orders is also a partial order, and therefore the conjunction over all keys of $D$ is also a partial order. Note that contrary to the next step, there is no logical dependency between the partial orderings of individual keys so the conjunction directly applies.
+				\pf~ Because of Assumption~\ref{subset}, $e \in \textit{keys}(D')$ as well, therefore both $D[e]$ and $D'[e]$ are defined. Because \stepref{label-2}, $\leq$ is a partial order over counters of $D$ and $D'$ for element $e$. Because \stepref{label-3}, the pairwise conjunction of partial orders is also a partial order, and therefore the conjunction over all keys of $D$ is also a partial order. Note that contrary to the next step, there is no logical dependency between the partial orderings of individual keys so the conjunction directly applies.
 			\end{proof}
 			
 			\step{label-5}{The conjunction of $\textit{keys}(D) \subseteq \textit{keys}(D')$ and \stepref{label-4} is a partial order.}
@@ -515,18 +518,18 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 		\step{label-1}{
 		\assume{\begin{pfenum}
 			\item $S \in \mathcal{P}(E)$ and $S' \in \mathcal{P}(E)$.
-			\item $\subseteq$ is a partial order on $\mathcal{P}(E)$ forming a semi-lattice $\mathds{L}_S$.
+			\item $\subseteq$ is a partial order on $\mathcal{P}(E)$ forming a semi-lattice $\mathds{L}_{\mathcal{P}(E)}$.
 		\end{pfenum}}
-		\prove{$S'' = S \cup S'$ is the least upper bound of $S$ and $S'$ in $\mathds{L}_S$.}}
+		\prove{$S'' = S \cup S'$ is the least upper bound of $S$ and $S'$ in $\mathds{L}_{\mathcal{P}(E)}$.}}
 		\begin{proof}
 			\step{label-1.1}{$S \subseteq S''$}
 			\begin{proof}
-				\pf~ Because $S \subseteq S \cup S' = S''$ (by cases on $S \subset S', S=S', S \supset S'$).
+				\pf~ Because $S \subseteq (S \cup S') = S''$ (by cases on $S \subset S', S=S', S \supset S'$).
 			\end{proof}
 			
 			\step{label-1.2}{$S' \subseteq S''$}
 			\begin{proof}
-				\pf~ Because $S' \subseteq S \cup S' = S''$ (by cases on $S \subset S', S=S', S \supset S'$).
+				\pf~ Because $S' \subseteq (S \cup S') = S''$ (by cases on $S \subset S', S=S', S \supset S'$).
 			\end{proof}
 			
 			\step{label-1.3}{$\nexists S''' \in \mathcal{P}(E)$ such that $S''' \subset S'' \wedge S \subseteq S''' \wedge S' \subseteq S''' $}
@@ -637,12 +640,12 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 				
 				\case{$e \notin \textit{keys}(D) \wedge e \in \textit{keys}(D')$}
 				\begin{proof}
-					\pf~ $D''[e] = D'[e]$ therefore a $c \in \mathds{N}$ cannot be both smaller than $D'']e]$ and larger than $D'[e]$. Because those two conditions cannot be true, $D[e] \leq c$, that is undefined, can be ignored.
+					\pf~ $D''[e] = D'[e]$ therefore a $c \in \mathds{N}$ cannot be both smaller than $D'']e]$ and larger than $D'[e]$. Because those two conditions can never be true, $D[e] \leq c$, that is undefined, can be ignored.
 				\end{proof}
 				
 				\case{$e \in \textit{keys}(D) \wedge e \notin \textit{keys}(D')$}
 				\begin{proof}
-					\pf~ $D''[e] = D[e]$ therefore a $c \in \mathds{N}$ cannot be both smaller than $D'']e]$ and larger than $D[e]$. Because those two conditions cannot be true,  $D'[e] \leq c$, that is undefined, can be ignored.
+					\pf~ $D''[e] = D[e]$ therefore a $c \in \mathds{N}$ cannot be both smaller than $D'']e]$ and larger than $D[e]$. Because those two conditions can never be true,  $D'[e] \leq c$, that is undefined, can be ignored.
 
 				\end{proof}
 				
@@ -701,7 +704,7 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 		\begin{proof}
 			\case{$e \notin \textit{keys}(D)$}
 			\begin{proof}
-				\pf~ The key $e$ is added to $D$ with counter $c$, therefore $D' \geq D$.
+				\pf~ The key $e$ is added to $D$ with counter $c=1$, therefore $D' \geq D$ because $D'$ keys are a superset of $D$'s keys.
 			\end{proof}
 			
 			\case{$e \in \textit{keys}(D) \wedge D[e]$ is even}
