@@ -739,22 +739,8 @@ We would also like to thank Jannick Heisch, Fabrizio Parrillo, and Osman Biçer 
 		
 		\case{$D'' = \texttt{Merge}(D,D') : D'' \geq D \wedge D'' \geq D'$}
 		\begin{proof}
-			\pf~ By definition, because \texttt{merge} computes the least upper bound (Appendix~\ref{sec:longer-proofs:convergence}).
+			\pf~ By definition, because \texttt{merge} computes the least upper bound (Appendix~\ref{sec:longer-proofs:lub}).
 		\end{proof}
-%\texttt{Query} leaves the state unchanged and is therefore monotonic by definition. \texttt{Add(e)} and \texttt{Remove(e)} are monotonic: 
-%\begin{enumerate}
-%    \item \texttt{Add(e)} and \texttt{Remove(e)} can only grow (or leave unchanged) the set of elements stored in $D$, \textit{i.e.} $(D' = \textit{keys}(D) \cup \{ e \}) \geq \textit{keys}(D)$; 
-%    \item \texttt{Add(e)} and \texttt{Remove(e)} can only grow (or leave unchanged) the associated counter, \textit{i.e.} $(D'[e] = D[e] ~\textit{or}~ (D[e] + 1)) \geq D[e]$. 
-%\end{enumerate}
-%In both cases, $D \leq D'$ according to the ordering $L$.
-%
-%\texttt{Merge} of state $D$ and $D'$ results in a new state $D''$ with the following properties:
-%\begin{enumerate}
-%    \item $\textit{keys}(D) \subseteq \textit{keys}(D'')$ and $\textit{keys}(D') \subseteq \textit{keys}(D'')$;
-%    \item $\forall_{e \in \textit{keys}(D)} D[e] \leq D''[e]$; 
-%    \item $\forall_{e \in \textit{keys}(D')} D'[e] \leq D''[e]$.
-%\end{enumerate}
-%It follows that $D \leq D''$ and $D' \leq D''$ in $L$. All operations are therefore monotonic.	
 	\end{proof}	
 \end{proof}
 
